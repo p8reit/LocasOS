@@ -1,0 +1,36 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  go:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Go tests
+        run: |
+          if [ -f go.mod ]; then go test ./...; else echo "Go scaffold pending: tracked in LOS-002"; fi
+      - name: Go formatting
+        run: |
+          if [ -f go.mod ]; then test -z "$(gofmt -l ./cmd ./internal 2>/dev/null)"; fi
+  shell:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        run: |
+          find scripts -type f -name '*.sh' -print0 2>/dev/null | xargs -0 -r -n1 bash -n
+  documentation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check project policy
+        run: |
+          test -f project/AGENT_POLICY.md
+          test -f docs/adr/0001-platform-foundation.md
