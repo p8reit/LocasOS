@@ -1,0 +1,121 @@
+openapi: 3.0.3
+info:
+  title: LOCAS OS Management API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+paths:
+  /system/health:
+    get:
+      summary: Control-plane health
+      responses:
+        '200':
+          description: Healthy control plane
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /hardware:
+    get:
+      summary: Node hardware inventory
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Hardware information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hardware'
+        '401':
+          description: Authentication required
+  /applications:
+    get:
+      summary: List managed applications
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+        '401':
+          description: Authentication required
+  /jobs:
+    get:
+      summary: List scheduled jobs
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Job'
+        '401':
+          description: Authentication required
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: locas_session
+  schemas:
+    Health:
+      type: object
+      required: [status, component]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        component:
+          type: string
+    Hardware:
+      type: object
+      required: [node, gpus]
+      properties:
+        node:
+          type: string
+        gpus:
+          type: array
+          items:
+            type: object
+            required: [id, name, memory_total_mib]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              memory_total_mib:
+                type: integer
+                minimum: 0
+              memory_used_mib:
+                type: integer
+                minimum: 0
+    Application:
+      type: object
+      required: [id, name, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [stopped, starting, running, degraded, failed]
+    Job:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [queued, admitted, running, succeeded, failed, cancelled, timed_out]
