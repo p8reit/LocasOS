@@ -1,5 +1,5 @@
 package docker
-import ("context";"encoding/json";"errors";"net";"net/http";"time")
+import ("context";"encoding/json";"errors";"io";"net";"net/http";"time")
 type Container struct {ID string `json:"Id"`; Names []string `json:"Names"`; Image string `json:"Image"`; State string `json:"State"`}
 func List(ctx context.Context,socket string)([]Container,error){
  if socket==""{return nil,errors.New("Docker socket path required")}
@@ -8,5 +8,5 @@ func List(ctx context.Context,socket string)([]Container,error){
  req,err:=http.NewRequestWithContext(ctx,http.MethodGet,"http://docker/v1.41/containers/json?all=1",nil);if err!=nil{return nil,err}
  resp,err:=client.Do(req);if err!=nil{return nil,err};defer resp.Body.Close()
  if resp.StatusCode!=http.StatusOK{return nil,errors.New("Docker inventory request failed")}
- var containers []Container;if err:=json.NewDecoder(http.MaxBytesReader(nil,resp.Body,1<<20)).Decode(&containers);err!=nil{return nil,err};return containers,nil
+ var containers []Container;if err:=json.NewDecoder(io.LimitReader(resp.Body,1<<20)).Decode(&containers);err!=nil{return nil,err};return containers,nil
 }
