@@ -173,57 +173,97 @@ func main() {
 	})
 	// Phase 6C: authenticated local-only operations. Never accept URLs or shell commands.
 	mux.HandleFunc("POST /api/model/pull", func(w http.ResponseWriter, r *http.Request) {
-		if !admins.Authenticated(r) { http.Error(w, "authentication required", http.StatusUnauthorized); return }
-		if !admin.SafeMutation(r) { http.Error(w, "invalid request", http.StatusForbidden); return }
-		var payload struct { Model string `json:"model"` }
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&payload); err != nil {
-			http.Error(w, "invalid model request", http.StatusBadRequest); return
+		if !admins.Authenticated(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
 		}
-		allowed := map[string]bool{"qwen2.5:3b":true,"qwen2.5-coder:7b":true,"llama3.2:3b":true}
-		if !allowed[payload.Model] { http.Error(w, "model not approved for preview", http.StatusBadRequest); return }
+		if !admin.SafeMutation(r) {
+			http.Error(w, "invalid request", http.StatusForbidden)
+			return
+		}
+		var payload struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&payload); err != nil {
+			http.Error(w, "invalid model request", http.StatusBadRequest)
+			return
+		}
+		allowed := map[string]bool{"qwen2.5:3b": true, "qwen2.5-coder:7b": true, "llama3.2:3b": true}
+		if !allowed[payload.Model] {
+			http.Error(w, "model not approved for preview", http.StatusBadRequest)
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Minute)
 		defer cancel()
-		client := &http.Client{Timeout: 15*time.Minute}
-		body, _ := json.Marshal(map[string]any{"model":payload.Model,"stream":false})
+		client := &http.Client{Timeout: 15 * time.Minute}
+		body, _ := json.Marshal(map[string]any{"model": payload.Model, "stream": false})
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "http://127.0.0.1:11434/api/pull", strings.NewReader(string(body)))
-		req.Header.Set("Content-Type","application/json")
+		req.Header.Set("Content-Type", "application/json")
 		resp, err := client.Do(req)
-		if err != nil { http.Error(w,"local runtime unavailable",http.StatusServiceUnavailable);return }
+		if err != nil {
+			http.Error(w, "local runtime unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK { http.Error(w,"model pull failed",http.StatusBadGateway);return }
+		if resp.StatusCode != http.StatusOK {
+			http.Error(w, "model pull failed", http.StatusBadGateway)
+			return
+		}
 		var outcome map[string]any
 		if err := json.NewDecoder(io.LimitReader(resp.Body, 16384)).Decode(&outcome); err != nil {
-			http.Error(w, "invalid runtime response", http.StatusBadGateway);return
+			http.Error(w, "invalid runtime response", http.StatusBadGateway)
+			return
 		}
-		sendJSON(w,http.StatusOK,map[string]any{"status":"download_complete","model":payload.Model})
+		sendJSON(w, http.StatusOK, map[string]any{"status": "download_complete", "model": payload.Model})
 	})
 	mux.HandleFunc("POST /api/chat", func(w http.ResponseWriter, r *http.Request) {
-		if !admins.Authenticated(r) { http.Error(w, "authentication required", http.StatusUnauthorized); return }
-		if !admin.SafeMutation(r) { http.Error(w, "invalid request", http.StatusForbidden); return }
-		var payload struct { Model string `json:"model"`; Prompt string `json:"prompt"` }
-		decoder := json.NewDecoder(http.MaxBytesReader(w,r.Body,8192))
+		if !admins.Authenticated(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		if !admin.SafeMutation(r) {
+			http.Error(w, "invalid request", http.StatusForbidden)
+			return
+		}
+		var payload struct {
+			Model  string `json:"model"`
+			Prompt string `json:"prompt"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&payload); err != nil || len(payload.Prompt) == 0 || len(payload.Prompt) > 6000 {
-			http.Error(w,"invalid chat request",http.StatusBadRequest);return
+			http.Error(w, "invalid chat request", http.StatusBadRequest)
+			return
 		}
-		if len(payload.Model)==0 || len(payload.Model)>128 || strings.ContainsAny(payload.Model, " /\\\\\\t\\n\\r") {
-			http.Error(w,"invalid model",http.StatusBadRequest);return
+		if len(payload.Model) == 0 || len(payload.Model) > 128 || strings.ContainsAny(payload.Model, " /\\\t\n\r") {
+			http.Error(w, "invalid model", http.StatusBadRequest)
+			return
 		}
-		// Ollama itself rejects unknown/uninstalled models; only bounded model names pass.
-		ctx,cancel := context.WithTimeout(r.Context(),90*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 		defer cancel()
-		data,_ := json.Marshal(map[string]any{"model":payload.Model,"stream":false,"messages":[]map[string]string{{"role":"user","content":payload.Prompt}},"options":map[string]int{"num_predict":256}})
-		req,_ := http.NewRequestWithContext(ctx,http.MethodPost,"http://127.0.0.1:11434/api/chat",strings.NewReader(string(data)))
-		req.Header.Set("Content-Type","application/json")
-		resp,err := (&http.Client{Timeout:90*time.Second}).Do(req)
-		if err != nil { http.Error(w,"local inference unavailable",http.StatusServiceUnavailable);return }
-		defer resp.Body.Close()
-		if resp.StatusCode!=http.StatusOK { http.Error(w,"local inference failed or model missing",http.StatusBadGateway);return }
-		var answer struct { Message struct { Content string `json:"content"` } `json:"message"` }
-		if err := json.NewDecoder(io.LimitReader(resp.Body,1048576)).Decode(&answer); err != nil {
-			http.Error(w,"invalid inference result",http.StatusBadGateway);return
+		data, _ := json.Marshal(map[string]any{"model": payload.Model, "stream": false, "messages": []map[string]string{{"role": "user", "content": payload.Prompt}}, "options": map[string]int{"num_predict": 256}})
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "http://127.0.0.1:11434/api/chat", strings.NewReader(string(data)))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := (&http.Client{Timeout: 90 * time.Second}).Do(req)
+		if err != nil {
+			http.Error(w, "local inference unavailable", http.StatusServiceUnavailable)
+			return
 		}
-		sendJSON(w,http.StatusOK,map[string]string{"reply":answer.Message.Content})
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			http.Error(w, "local inference failed or model missing", http.StatusBadGateway)
+			return
+		}
+		var answer struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		}
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 1048576)).Decode(&answer); err != nil {
+			http.Error(w, "invalid inference result", http.StatusBadGateway)
+			return
+		}
+		sendJSON(w, http.StatusOK, map[string]string{"reply": answer.Message.Content})
 	})
 	mux.HandleFunc("GET /internal/agent-health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
