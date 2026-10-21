@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net/http"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	iterations = 600000
-	cookieName = "locas_session"
+	iterations  = 600000
+	cookieName  = "locas_session"
 	sessionLife = 8 * time.Hour
 )
 
@@ -34,9 +34,9 @@ type session struct {
 }
 
 type Manager struct {
-	mu sync.Mutex
-	path string
-	creds *credentials
+	mu       sync.Mutex
+	path     string
+	creds    *credentials
 	sessions map[string]session
 	failures map[string][]time.Time
 }
@@ -46,7 +46,7 @@ func New(dir string) (*Manager, error) {
 		return nil, err
 	}
 	m := &Manager{
-		path: filepath.Join(dir, "admin.json"),
+		path:     filepath.Join(dir, "admin.json"),
 		sessions: make(map[string]session),
 		failures: make(map[string][]time.Time),
 	}
