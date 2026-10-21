@@ -1,5 +1,48 @@
 package gpu
-import ("context";"encoding/csv";"errors";"os/exec";"strconv";"strings";"time")
-type Device struct {Name string `json:"name"`; MemoryTotalMiB uint64 `json:"memory_total_mib"`; MemoryUsedMiB uint64 `json:"memory_used_mib"`; UtilizationPercent uint64 `json:"utilization_percent"`}
-func ParseCSV(s string)([]Device,error){rows,err:=csv.NewReader(strings.NewReader(strings.TrimSpace(s))).ReadAll();if err!=nil{return nil,err};var out []Device;for _,row:=range rows{if len(row)!=4{return nil,errors.New("expected four nvidia-smi columns")};total,e1:=strconv.ParseUint(strings.TrimSpace(row[1]),10,64);used,e2:=strconv.ParseUint(strings.TrimSpace(row[2]),10,64);util,e3:=strconv.ParseUint(strings.TrimSpace(row[3]),10,64);if e1!=nil||e2!=nil||e3!=nil||used>total||util>100{return nil,errors.New("invalid gpu values")};out=append(out,Device{Name:strings.TrimSpace(row[0]),MemoryTotalMiB:total,MemoryUsedMiB:used,UtilizationPercent:util})};return out,nil}
-func Probe(parent context.Context)([]Device,error){ctx,cancel:=context.WithTimeout(parent,3*time.Second);defer cancel();out,err:=exec.CommandContext(ctx,"nvidia-smi","--query-gpu=name,memory.total,memory.used,utilization.gpu","--format=csv,noheader,nounits").Output();if err!=nil{return nil,err};return ParseCSV(string(out))}
+
+import (
+	"context"
+	"encoding/csv"
+	"errors"
+	"os/exec"
+	"strconv"
+	"strings"
+	"time"
+)
+
+type Device struct {
+	Name               string `json:"name"`
+	MemoryTotalMiB     uint64 `json:"memory_total_mib"`
+	MemoryUsedMiB      uint64 `json:"memory_used_mib"`
+	UtilizationPercent uint64 `json:"utilization_percent"`
+}
+
+func ParseCSV(s string) ([]Device, error) {
+	rows, err := csv.NewReader(strings.NewReader(strings.TrimSpace(s))).ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	var out []Device
+	for _, row := range rows {
+		if len(row) != 4 {
+			return nil, errors.New("expected four nvidia-smi columns")
+		}
+		total, e1 := strconv.ParseUint(strings.TrimSpace(row[1]), 10, 64)
+		used, e2 := strconv.ParseUint(strings.TrimSpace(row[2]), 10, 64)
+		util, e3 := strconv.ParseUint(strings.TrimSpace(row[3]), 10, 64)
+		if e1 != nil || e2 != nil || e3 != nil || used > total || util > 100 {
+			return nil, errors.New("invalid gpu values")
+		}
+		out = append(out, Device{Name: strings.TrimSpace(row[0]), MemoryTotalMiB: total, MemoryUsedMiB: used, UtilizationPercent: util})
+	}
+	return out, nil
+}
+func Probe(parent context.Context) ([]Device, error) {
+	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu", "--format=csv,noheader,nounits").Output()
+	if err != nil {
+		return nil, err
+	}
+	return ParseCSV(string(out))
+}
