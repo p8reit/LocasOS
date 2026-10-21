@@ -1,7 +1,6 @@
 package peercred
 
 import (
-	"errors"
 	"net"
 )
 
@@ -11,15 +10,17 @@ type Listener struct {
 	*net.UnixListener
 	ExpectedUID uint32
 }
+
 func (l *Listener) Accept() (net.Conn, error) {
 	for {
 		conn, err := l.UnixListener.AcceptUnix()
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		uid, err := UID(conn)
 		if err == nil && AllowedUID(uid, l.ExpectedUID) {
 			return conn, nil
 		}
 		_ = conn.Close()
-		if errors.Is(err, net.ErrClosed) { return nil, err }
 	}
 }
