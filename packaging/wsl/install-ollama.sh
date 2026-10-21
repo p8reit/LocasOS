@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# Explicitly invoked by Windows opt-in script. Never install in shared Ubuntu/Docker.
-if [[ $(id -u) -ne 0 ]]; then echo "Must run as root in LocasOS" >&2; exit 1; fi
+# Only the dedicated LocasOS WSL distro; installed by explicit user opt-in.
+if [[ $(id -u) -ne 0 ]]; then
+  echo "Must run as root in LocasOS" >&2
+  exit 1
+fi
 if [[ ! -f /etc/wsl.conf ]] || ! grep -q 'systemd=true' /etc/wsl.conf || ! systemctl list-unit-files --no-legend locas-core.service | grep -q locas-core; then
-  echo "Refusing non-LocasOS distro" >&2; exit 1
+  echo "Refusing non-LocasOS distro" >&2
+  exit 1
 fi
 if [[ -e /usr/local/bin/ollama ]]; then
-  echo "Ollama already installed; refusing to overwrite an existing runtime" >&2
+  echo "Ollama already installed; refusing to overwrite" >&2
   exit 1
 fi
 work="$(mktemp -d)"
@@ -14,23 +18,20 @@ trap 'rm -rf "$work"' EXIT
 url="https://ollama.com/download/ollama-linux-amd64.tar.zst"
 echo "Downloading official Ollama Linux archive (runtime version supplied by ollama.com)"
 curl --fail --location --proto '=https' --tlsv1.2 --retry 3 --output "$work/ollama.tar.zst" "$url"
-# Download and extraction deliberately happen only after the explicit opt-in.
+# GNU tar lists archive members as either bin/ollama or ./bin/ollama.
+# Avoid piping tar to grep with pipefail: an early grep exit would signal SIGPIPE.
 tar --zstd -tf "$work/ollama.tar.zst" > "$work/contents.txt"
-grep -Eq '^((\\./)?bin/ollama)
-  echo "Unexpected archive layout" >&2; exit 1;
-}
+if ! grep -Eq '^(\\./)?bin/ollama$' "$work/contents.txt"; then
+  echo "Unexpected archive layout. First entries:" >&2
+  head -n 15 "$work/contents.txt" >&2
+  exit 1
+fi
 tar --zstd -xf "$work/ollama.tar.zst" -C /usr/local
-test -x /usr/local/bin/ollama || { echo "Ollama binary missing after extraction" >&2; exit 1; }
+if [[ ! -x /usr/local/bin/ollama ]]; then
+  echo "Ollama binary missing after extraction" >&2
+  exit 1
+fi
 systemctl daemon-reload
 systemctl enable --now locas-ollama.service
 systemctl is-active --quiet locas-ollama.service
-echo "Installed isolated Ollama runtime. Note: live downloaded archive is not pinned to a release checksum."
- "$work/contents.txt" || {
-  echo "Unexpected archive layout" >&2; exit 1;
-}
-tar --zstd -xf "$work/ollama.tar.zst" -C /usr/local
-test -x /usr/local/bin/ollama || { echo "Ollama binary missing after extraction" >&2; exit 1; }
-systemctl daemon-reload
-systemctl enable --now locas-ollama.service
-systemctl is-active --quiet locas-ollama.service
-echo "Installed isolated Ollama runtime. Note: live downloaded archive is not pinned to a release checksum."
+echo "Installed isolated Ollama runtime. Live archive download is not checksum-pinned."
