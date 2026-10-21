@@ -43,6 +43,7 @@ jobs:
           cp packaging/wsl/Test-LocasOS.ps1 dist/
           cp packaging/wsl/Keep-LocasOS-Running.ps1 dist/
           cp packaging/wsl/Enable-LocasOS-Autostart.ps1 dist/
+          cp packaging/wsl/Repair-LocasOS-Autostart.ps1 dist/
           cp packaging/wsl/Disable-LocasOS-Autostart.ps1 dist/
           cp packaging/wsl/Reset-LocasOS-Test.ps1 dist/
           cp packaging/wsl/Install-Ollama-LocasOS.ps1 dist/
@@ -72,6 +73,7 @@ jobs:
             dist/Test-LocasOS.ps1
             dist/Keep-LocasOS-Running.ps1
             dist/Enable-LocasOS-Autostart.ps1
+            dist/Repair-LocasOS-Autostart.ps1
             dist/Disable-LocasOS-Autostart.ps1
             dist/Reset-LocasOS-Test.ps1
             dist/Install-Ollama-LocasOS.ps1
