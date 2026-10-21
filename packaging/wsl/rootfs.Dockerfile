@@ -14,8 +14,12 @@ COPY packaging/wsl/locas-agent.service /etc/systemd/system/locas-agent.service
 COPY packaging/wsl/locas-ollama.service /etc/systemd/system/locas-ollama.service
 COPY packaging/wsl/install-ollama.sh /usr/local/sbin/locas-install-ollama
 COPY packaging/wsl/firstboot.sh /usr/local/sbin/locas-firstboot
+COPY packaging/wsl/install-open-webui.sh /usr/local/sbin/locas-install-open-webui
+COPY packaging/wsl/locas-app-worker.sh /usr/local/sbin/locas-app-worker
+COPY packaging/wsl/locas-app-worker.service /etc/systemd/system/locas-app-worker.service
+COPY packaging/wsl/locas-app-worker.path /etc/systemd/system/locas-app-worker.path
 COPY packaging/wsl/locas-firstboot.service /etc/systemd/system/locas-firstboot.service
 COPY build/locas-core /opt/locas/bin/locas-core
 COPY build/locas-agent /opt/locas/bin/locas-agent
-RUN chmod 0755 /usr/local/sbin/locas-firstboot /usr/local/sbin/locas-install-ollama /opt/locas/bin/* \
-    && systemctl enable locas-firstboot.service locas-agent.service locas-core.service
+RUN chmod 0755 /usr/local/sbin/locas-firstboot /usr/local/sbin/locas-install-ollama /usr/local/sbin/locas-install-open-webui /usr/local/sbin/locas-app-worker /opt/locas/bin/* \
+    && systemctl enable locas-firstboot.service locas-agent.service locas-core.service locas-app-worker.path
