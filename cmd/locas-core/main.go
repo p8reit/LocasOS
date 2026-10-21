@@ -265,21 +265,38 @@ func main() {
 		}
 		sendJSON(w, http.StatusOK, map[string]string{"reply": answer.Message.Content})
 	})
-	// Authenticated application-manager proxy: only fixed routes on the peer-checked Unix agent socket.
+	// Authenticated application-manager proxy: fixed routes on the peer-checked agent socket.
 	mux.HandleFunc("GET /api/apps", func(w http.ResponseWriter, r *http.Request) {
-		if !admins.Authenticated(r) { http.Error(w, "authentication required", http.StatusUnauthorized); return }
+		if !admins.Authenticated(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
 		appProxy(w, r, socket, http.MethodGet, "/internal/apps/status", nil)
 	})
 	mux.HandleFunc("POST /api/apps/install", func(w http.ResponseWriter, r *http.Request) {
-		if !admins.Authenticated(r) { http.Error(w, "authentication required", http.StatusUnauthorized); return }
-		if !admin.SafeMutation(r) { http.Error(w, "invalid request", http.StatusForbidden); return }
-		var body struct { App string `json:"app"` }
-		dec := json.NewDecoder(http.MaxBytesReader(w,r.Body,1024))
+		if !admins.Authenticated(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		if !admin.SafeMutation(r) {
+			http.Error(w, "invalid request", http.StatusForbidden)
+			return
+		}
+		var body struct {
+			App string `json:"app"`
+		}
+		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
 		dec.DisallowUnknownFields()
-		if err:=dec.Decode(&body);err!=nil {http.Error(w,"bad request",http.StatusBadRequest);return}
-		if body.App!="ollama" && body.App!="open-webui" {http.Error(w,"unsupported app",http.StatusBadRequest);return}
-		data,_:=json.Marshal(body)
-		appProxy(w,r,socket,http.MethodPost,"/internal/apps/install",data)
+		if err := dec.Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if body.App != "ollama" && body.App != "open-webui" {
+			http.Error(w, "unsupported app", http.StatusBadRequest)
+			return
+		}
+		data, _ := json.Marshal(body)
+		appProxy(w, r, socket, http.MethodPost, "/internal/apps/install", data)
 	})
 	mux.HandleFunc("GET /internal/agent-health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
@@ -318,21 +335,27 @@ func sendJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-func appProxy(w http.ResponseWriter,r *http.Request,socket,method,path string,payload []byte) {
-	ctx,cancel:=context.WithTimeout(r.Context(),5*time.Second)
+func appProxy(w http.ResponseWriter, r *http.Request, socket, method, path string, payload []byte) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	tr:=&http.Transport{DialContext:func(ctx context.Context,_,_ string)(net.Conn,error){
-		return (&net.Dialer{Timeout:time.Second}).DialContext(ctx,"unix",socket)
+	tr := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "unix", socket)
 	}}
 	defer tr.CloseIdleConnections()
-	req,err:=http.NewRequestWithContext(ctx,method,"http://agent"+path,strings.NewReader(string(payload)))
-	if err!=nil {http.Error(w,"invalid request",500);return}
-	req.Header.Set("Content-Type","application/json")
-	resp,err:=(&http.Client{Transport:tr,Timeout:5*time.Second}).Do(req)
-	if err!=nil {http.Error(w,"app manager unavailable",503);return}
+	req, err := http.NewRequestWithContext(ctx, method, "http://agent"+path, strings.NewReader(string(payload)))
+	if err != nil {
+		http.Error(w, "invalid request", 500)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Transport: tr, Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		http.Error(w, "app manager unavailable", 503)
+		return
+	}
 	defer resp.Body.Close()
-	w.Header().Set("Content-Type","application/json")
-	w.Header().Set("Cache-Control","no-store")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(resp.StatusCode)
-	_,_=io.Copy(w,io.LimitReader(resp.Body,8192))
+	_, _ = io.Copy(w, io.LimitReader(resp.Body, 8192))
 }
