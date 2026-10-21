@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LOCAS OS Config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "system",
+    "api"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "mode"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "const": "standalone"
+        },
+        "data_dir": {
+          "type": "string"
+        }
+      }
+    },
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "listen"
+      ],
+      "properties": {
+        "listen": {
+          "type": "string",
+          "pattern": "^(127\\.0\\.0\\.1|\\[::1\\]):[0-9]+$"
+        }
+      }
+    },
+    "gpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "enum": [
+            "nvidia",
+            "none"
+          ]
+        },
+        "admission_headroom_mib": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
