@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/p8reit/LocasOS/internal/agentapi"
+	"github.com/p8reit/LocasOS/internal/appmanager"
 	"github.com/p8reit/LocasOS/internal/gpu"
 	"github.com/p8reit/LocasOS/internal/hardware"
 	"github.com/p8reit/LocasOS/internal/peercred"
@@ -52,6 +53,7 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", server.NewHandler("locas-agent"))
+	mux.Handle("/internal/apps/",http.StripPrefix("/internal/apps",appmanager.New("/var/lib/locas").Handler()))
 	mux.Handle("/internal/telemetry", agentapi.NewTelemetryHandler(hardware.Collect, gpu.Probe))
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	log.Printf("locas-agent listening on unix socket %s (allowed uid: %d)", socket, uid)
