@@ -20,6 +20,9 @@ import (
 //go:embed index.html
 var landingPage []byte
 
+// Assigned at build time using -ldflags; development binaries identify their provenance.
+var buildVersion = "dev"
+
 func main() {
 	addr := os.Getenv("LOCAS_LISTEN")
 	if addr == "" {
@@ -47,6 +50,18 @@ func main() {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
 		_, _ = w.Write(landingPage)
+	})
+	mux.HandleFunc("GET /api/updates", func(w http.ResponseWriter, r *http.Request) {
+		if !admins.Authenticated(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		sendJSON(w, http.StatusOK, map[string]string{
+			"installed_version": buildVersion,
+			"availability":      "not_checked",
+			"update_method":     "verified_local_bundle",
+			"message":           "Automatic release discovery and dashboard application are not enabled yet. Apply a downloaded, checksummed LOCAS OS upgrade package with Upgrade-LocasOS.ps1.",
+		})
 	})
 	mux.HandleFunc("GET /api/session", func(w http.ResponseWriter, r *http.Request) {
 		sendJSON(w, http.StatusOK, map[string]bool{
