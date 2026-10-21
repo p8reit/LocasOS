@@ -74,7 +74,8 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "installation already running", 409)
 		return
 	}
-	f, err := os.OpenFile(request, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0640)
+	temp := filepath.Join(m.Dir, "app-install.queue.tmp")
+	f, err := os.OpenFile(temp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0640)
 	if err != nil {
 		code := http.StatusServiceUnavailable
 		if errors.Is(err, os.ErrExist) {
@@ -86,7 +87,17 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 	_, writeErr := f.WriteString(body.App + "\n")
 	closeErr := f.Close()
 	if writeErr != nil || closeErr != nil {
-		_ = os.Remove(request)
+		_ = os.Remove(temp)
+		http.Error(w, "queue failed", 503)
+		return
+	}
+	if _, err := os.Stat(request); err == nil {
+		_ = os.Remove(temp)
+		http.Error(w, "installation already queued", http.StatusConflict)
+		return
+	}
+	if err := os.Rename(temp, request); err != nil {
+		_ = os.Remove(temp)
 		http.Error(w, "queue failed", 503)
 		return
 	}
