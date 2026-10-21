@@ -50,7 +50,7 @@ func main() {
 	})
 	mux.HandleFunc("GET /api/session", func(w http.ResponseWriter, r *http.Request) {
 		sendJSON(w, http.StatusOK, map[string]bool{
-			"configured": admins.Configured(),
+			"configured":    admins.Configured(),
 			"authenticated": admins.Authenticated(r),
 		})
 	})
