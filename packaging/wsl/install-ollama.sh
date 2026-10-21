@@ -15,7 +15,17 @@ url="https://ollama.com/download/ollama-linux-amd64.tar.zst"
 echo "Downloading official Ollama Linux archive (runtime version supplied by ollama.com)"
 curl --fail --location --proto '=https' --tlsv1.2 --retry 3 --output "$work/ollama.tar.zst" "$url"
 # Download and extraction deliberately happen only after the explicit opt-in.
-tar --zstd -tf "$work/ollama.tar.zst" | grep -qx 'bin/ollama' || {
+tar --zstd -tf "$work/ollama.tar.zst" > "$work/contents.txt"
+grep -Eq '^((\\./)?bin/ollama)
+  echo "Unexpected archive layout" >&2; exit 1;
+}
+tar --zstd -xf "$work/ollama.tar.zst" -C /usr/local
+test -x /usr/local/bin/ollama || { echo "Ollama binary missing after extraction" >&2; exit 1; }
+systemctl daemon-reload
+systemctl enable --now locas-ollama.service
+systemctl is-active --quiet locas-ollama.service
+echo "Installed isolated Ollama runtime. Note: live downloaded archive is not pinned to a release checksum."
+ "$work/contents.txt" || {
   echo "Unexpected archive layout" >&2; exit 1;
 }
 tar --zstd -xf "$work/ollama.tar.zst" -C /usr/local
