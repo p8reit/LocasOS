@@ -15,7 +15,9 @@ if ($LASTEXITCODE -ne 0) { throw "Could not inspect Linux TCP listeners." }
 Write-Host "Testing Windows to WSL localhost on port $Port..."
 $endpoint = "http://127.0.0.1:$Port/healthz"
 try {
-    $response = Invoke-RestMethod -Uri $endpoint -TimeoutSec 8 -NoProxy
+    $raw = & curl.exe --silent --show-error --fail --noproxy "*" --max-time 8 $endpoint
+    if ($LASTEXITCODE -ne 0) { throw "curl.exe exit code $LASTEXITCODE" }
+    $response = $raw | ConvertFrom-Json
     if ($response.component -ne "locas-core" -or $response.status -ne "ok") {
         throw "Unexpected health response from $endpoint; verify that another app is not using the port."
     }
