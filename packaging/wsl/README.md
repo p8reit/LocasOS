@@ -134,3 +134,16 @@ The authenticated dashboard can request an explicitly allowlisted small model do
 ## Repair Ollama model-pull key permissions (Phase 6)
 
 A fresh Ollama service may fail with `open /home/locas-ollama/.ollama/id_ed25519: permission denied` because `ProtectHome=yes` shields the service user's original home path. The corrected service specifies `HOME=/var/lib/locas-ollama`, a protected, persistent, writable state directory. From a new test package, run `.\\Repair-Ollama-LocasOS.ps1` to patch the **existing** dedicated WSL installation. This does not require re-import, reinstalling Ollama, or re-downloading the Ollama archive; it restarts only locas-ollama.service. Then retry the browser model pull. The repair is safe to run again.
+
+## Phase 7 — Open WebUI workspace (optional)
+
+The Windows test package bundles `Install-OpenWebUI-LocasOS.ps1` and `Test-OpenWebUI-LocasOS.ps1`. After verifying Ollama and importing the latest appliance, run from PowerShell:
+
+```powershell
+.\\Install-OpenWebUI-LocasOS.ps1 -AcceptDownload
+.\\Test-OpenWebUI-LocasOS.ps1
+```
+
+The installer explicitly downloads Ubuntu's `docker.io` package **inside the dedicated LocasOS distribution**, starts that isolated Docker daemon and pulls the official `ghcr.io/open-webui/open-webui:main-slim` image. Its container shares only the LocasOS network namespace (so it can reach Ollama at loopback), serves the UI on **127.0.0.1:59421**, and persists Open WebUI's database at `/var/lib/locas-open-webui/data`. A stable randomly generated secret is stored under `/var/lib/locas-open-webui/secret`. It does not use or modify Windows Docker Desktop, Ubuntu, or the other WSL distributions. The appliance dashboard links to the workspace, rather than reverse-proxying it or falsely claiming shared authentication. Open WebUI's first user is its own admin and must be enrolled separately.
+
+**Preview boundary:** The image tag is not digest-pinned and installation needs external downloads; local inference is through the existing Ollama service. Web search, tools/functions, pipelines, remote connectors and computer-use are not installed, configured or safely isolated yet; leave external integrations disabled until explicitly reviewed. Open WebUI exposes powerful extensions; only install audited trusted tools. No agentic code execution is advertised as safe in this release. To diagnose: `wsl -d LocasOS -u root -- docker logs --tail 80 locas-open-webui`. No WSL reset is required to install this workspace into an existing compatible appliance, as long as the installation scripts are extracted from the new package.
