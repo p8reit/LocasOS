@@ -44,6 +44,7 @@ jobs:
           cp packaging/wsl/Disable-LocasOS-Autostart.ps1 dist/
           cp packaging/wsl/Reset-LocasOS-Test.ps1 dist/
           cp packaging/wsl/Install-Ollama-LocasOS.ps1 dist/
+          cp packaging/wsl/Test-Ollama-LocasOS.ps1 dist/
           cp packaging/wsl/README.md dist/TESTING.md
       - uses: actions/upload-artifact@v4
         with:
@@ -60,5 +61,6 @@ jobs:
             dist/Disable-LocasOS-Autostart.ps1
             dist/Reset-LocasOS-Test.ps1
             dist/Install-Ollama-LocasOS.ps1
+            dist/Test-Ollama-LocasOS.ps1
             dist/TESTING.md
           retention-days: 7
