@@ -30,8 +30,9 @@ jobs:
         run: |
           cd dist
           sha256sum -c locasos-wsl-amd64.tar.sha256
-          tar tf locasos-wsl-amd64.tar | grep -q 'opt/locas/bin/locas-core'
-          tar tf locasos-wsl-amd64.tar | grep -q 'etc/wsl.conf'
+          tar tf locasos-wsl-amd64.tar > tar-contents.txt
+          grep -q 'opt/locas/bin/locas-core' tar-contents.txt
+          grep -q 'etc/wsl.conf' tar-contents.txt
       - uses: actions/upload-artifact@v4
         with:
           name: locasos-wsl-dev-rootfs
