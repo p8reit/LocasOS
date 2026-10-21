@@ -33,7 +33,7 @@ func readStatus(path string) string {
 }
 
 func (m *Manager) status(w http.ResponseWriter, r *http.Request) {
-	status := readStatus(filepath.Join(m.Dir, "app-install.status"))
+	status := readStatus("/var/lib/locas-apps/app-install.status")
 	_, ollamaErr := os.Stat("/usr/local/bin/ollama")
 	_, webuiErr := os.Stat("/var/lib/locas-open-webui/data")
 	w.Header().Set("Content-Type", "application/json")
@@ -54,7 +54,7 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 	defer m.mu.Unlock()
 	if err := os.MkdirAll(m.Dir,0750); err != nil { http.Error(w,"state unavailable",503);return }
 	request := filepath.Join(m.Dir,"app-install.request")
-	statusPath := filepath.Join(m.Dir,"app-install.status")
+	statusPath := "/var/lib/locas-apps/app-install.status"
 	if data, err := os.ReadFile(statusPath); err == nil && strings.HasPrefix(string(data),"installing:") {
 		http.Error(w,"installation already running",409);return
 	}
