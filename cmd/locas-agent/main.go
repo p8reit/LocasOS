@@ -2,6 +2,9 @@ package main
 
 import (
 	"github.com/p8reit/LocasOS/internal/server"
+	"github.com/p8reit/LocasOS/internal/agentapi"
+	"github.com/p8reit/LocasOS/internal/hardware"
+	"github.com/p8reit/LocasOS/internal/gpu"
 	"log"
 	"net"
 	"net/http"
@@ -36,7 +39,10 @@ func main() {
 	if err := os.Chmod(socket, 0660); err != nil {
 		log.Fatal(err)
 	}
-	srv := &http.Server{Handler: server.NewHandler("locas-agent"), ReadHeaderTimeout: 5 * time.Second}
+	mux := http.NewServeMux()
+	mux.Handle("/healthz", server.NewHandler("locas-agent"))
+	mux.Handle("/internal/telemetry", agentapi.NewTelemetryHandler(hardware.Collect, gpu.Probe))
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	log.Printf("locas-agent listening on unix socket %s", socket)
 	log.Fatal(srv.Serve(listener))
 }
