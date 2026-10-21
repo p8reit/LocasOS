@@ -86,3 +86,11 @@ Get-ScheduledTask -TaskName LocasOS-User-Autostart
 ```
 
 Close all interactive Linux and installation PowerShell consoles and check the page again. If no popup appears and the landing page stays accessible, the repair works. A full sign-out/sign-in test is still required. To inspect task action: `(Get-ScheduledTask -TaskName LocasOS-User-Autostart).Actions | Format-List Execute,Arguments`.
+
+## Authenticated dashboard preview
+
+The new test build adds one-time local administrator enrollment at `http://127.0.0.1:59420/`. The first user sets a strong password (minimum 14 characters) in the browser. The salted PBKDF2-HMAC-SHA256 administrator hash is stored with file mode 0600 under the core service's private state directory; it survives restarting the WSL distribution. Sessions are HttpOnly and SameSite Strict and expire after eight hours or when locas-core restarts.
+
+CPU, RAM and GPU telemetry is now proxied only for logged-in sessions. Agent telemetry remains on the Unix-domain socket and peer UID checks are enforced. There is no model execution, Docker control, or externally accessible management API. Keep the appliance bound to `127.0.0.1`; passwords and cookies are transmitted via local HTTP, **not encrypted TLS**. Do not reverse-proxy the preview or expose it on the LAN. If you lose the password, do not delete the credentials file automatically; state recovery requires a separate reviewed workflow.
+
+From Windows PowerShell after importing, execute `.\\Test-LocasOS.ps1` and confirm unauthenticated `/api/telemetry` returns HTTP 401. Then open the landing page and enroll, sign in and verify system metrics. This is not yet a production security audit.
