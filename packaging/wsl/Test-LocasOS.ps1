@@ -56,3 +56,10 @@ if ($LASTEXITCODE -ne 0 -or $runtimeCode -ne "401") {
     throw "Security failure: anonymous runtime inventory must return HTTP 401, got $runtimeCode."
 }
 Write-Host "PASS: anonymous runtime inventory is denied (HTTP 401)."
+
+Write-Host "Checking appliance app-manager authentication..."
+$appCode = & curl.exe --silent --output NUL --write-out "%{http_code}" --noproxy "*" --max-time 8 "http://127.0.0.1:$Port/api/apps"
+if ($LASTEXITCODE -ne 0 -or $appCode -ne "401") { throw "Anonymous app inventory must return HTTP 401; got $appCode" }
+$appPostCode = & curl.exe --silent --output NUL --write-out "%{http_code}" --noproxy "*" --max-time 8 -X POST -H "Content-Type: application/json" -H "X-Locas-Request: 1" --data '{"app":"ollama"}' "http://127.0.0.1:$Port/api/apps/install"
+if ($LASTEXITCODE -ne 0 -or $appPostCode -ne "401") { throw "Anonymous app install must return HTTP 401; got $appPostCode" }
+Write-Host "PASS: app inventory and installs are authenticated (HTTP 401 without login)."

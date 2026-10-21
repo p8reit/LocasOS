@@ -1,0 +1,8 @@
+[Unit]
+Description=LOCAS OS pending approved application installation
+After=locas-firstboot.service
+[Path]
+PathExists=/var/lib/locas/app-install.request
+Unit=locas-app-worker.service
+[Install]
+WantedBy=multi-user.target
