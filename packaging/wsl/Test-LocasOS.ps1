@@ -27,3 +27,12 @@ try {
     Write-Warning "WSL can stop when no sessions are active. Open another terminal with 'wsl -d LocasOS -u root -- bash', leave it open, then retry."
     throw
 }
+
+Write-Host "Checking browser landing page..."
+$page = & curl.exe --silent --show-error --fail --noproxy "*" --max-time 8 "http://127.0.0.1:$Port/"
+if ($LASTEXITCODE -ne 0) { throw "Landing page HTTP request failed." }
+$pageText = $page -join "`n"
+if ($pageText -notmatch 'LOCAS OS' -or $pageText -notmatch 'Your infrastructure') {
+    throw "Unexpected landing page content. Another service may own port $Port."
+}
+Write-Host "PASS: LOCAS OS landing page is available at http://127.0.0.1:$Port/"
