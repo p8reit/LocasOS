@@ -15,7 +15,7 @@ A GitHub Actions PR workflow produces the same checksummed development archive f
 
 ## Import on Windows (only in a disposable test environment)
 
-From PowerShell with Windows WSL2 installed, obtain the tar from an approved build and cross-check its SHA-256 against the published build artifact:
+From PowerShell with Windows WSL2 installed, download the successful GitHub Actions **WSL Appliance Build** artifact, extract it to a new directory, and run the included installer:
 
 ```powershell
 .\Install-LocasOS.ps1 -RootfsArchive .\locasos-wsl-amd64.tar -Sha256 <verified-64-character-sha256>
