@@ -21,7 +21,7 @@ jobs:
           go-version: '1.23'
       - name: Validate scripts and Go
         run: |
-          bash -n packaging/wsl/firstboot.sh packaging/wsl/build-rootfs.sh packaging/wsl/install-ollama.sh packaging/wsl/repair-ollama.sh packaging/wsl/install-open-webui.sh packaging/wsl/locas-app-worker.sh
+          bash -n packaging/wsl/firstboot.sh packaging/wsl/build-rootfs.sh packaging/wsl/install-ollama.sh packaging/wsl/repair-ollama.sh packaging/wsl/install-open-webui.sh packaging/wsl/locas-app-worker.sh packaging/wsl/upgrade-locas.sh
           go test ./...
           test -z "$(gofmt -l ./cmd ./internal)"
       - name: Build image and checksummed rootfs
@@ -30,6 +30,8 @@ jobs:
         run: |
           cd dist
           sha256sum -c locasos-wsl-amd64.tar.sha256
+          sha256sum -c locasos-upgrade-amd64.tar.sha256
+          tar tf locasos-upgrade-amd64.tar | grep -q 'opt/locas/bin/locas-core'
           tar tf locasos-wsl-amd64.tar > tar-contents.txt
           grep -q 'opt/locas/bin/locas-core' tar-contents.txt
           grep -q 'etc/wsl.conf' tar-contents.txt
@@ -50,6 +52,8 @@ jobs:
           cp packaging/wsl/Repair-Ollama-LocasOS.ps1 dist/
           cp packaging/wsl/install-open-webui.sh dist/
           cp packaging/wsl/Install-OpenWebUI-LocasOS.ps1 dist/
+          cp packaging/wsl/Upgrade-LocasOS.ps1 dist/
+          cp packaging/wsl/upgrade-locas.sh dist/
           cp packaging/wsl/Test-OpenWebUI-LocasOS.ps1 dist/
           cp packaging/wsl/README.md dist/TESTING.md
       - uses: actions/upload-artifact@v4
@@ -58,6 +62,10 @@ jobs:
           path: |
             dist/locasos-wsl-amd64.tar
             dist/locasos-wsl-amd64.tar.sha256
+            dist/locasos-upgrade-amd64.tar
+            dist/locasos-upgrade-amd64.tar.sha256
+            dist/Upgrade-LocasOS.ps1
+            dist/upgrade-locas.sh
             dist/Install-LocasOS.ps1
             dist/Install-TestPackage.ps1
             dist/diagnose.ps1

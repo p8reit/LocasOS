@@ -12,3 +12,21 @@ trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 docker export "$container" -o dist/locasos-wsl-amd64.tar
 (cd dist && sha256sum locasos-wsl-amd64.tar > locasos-wsl-amd64.tar.sha256)
 echo "Built dist/locasos-wsl-amd64.tar"
+
+# Build a small upgrade bundle independent of the rootfs so existing models,
+# account state and app data are not replaced during development upgrades.
+stage="$(mktemp -d)"
+trap 'rm -rf "$stage"; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+mkdir -p "$stage/opt/locas/bin" "$stage/etc/systemd/system" "$stage/usr/local/sbin"
+cp build/locas-core build/locas-agent "$stage/opt/locas/bin/"
+cp packaging/wsl/locas-core.service packaging/wsl/locas-agent.service \
+   packaging/wsl/locas-app-worker.path packaging/wsl/locas-app-worker.service \
+   "$stage/etc/systemd/system/"
+cp packaging/wsl/locas-app-worker.sh "$stage/usr/local/sbin/locas-app-worker"
+cp packaging/wsl/install-ollama.sh "$stage/usr/local/sbin/locas-install-ollama"
+cp packaging/wsl/install-open-webui.sh "$stage/usr/local/sbin/locas-install-open-webui"
+cp packaging/wsl/repair-ollama.sh "$stage/usr/local/sbin/locas-repair-ollama"
+chmod 0755 "$stage/opt/locas/bin/"* "$stage/usr/local/sbin/"*
+tar -C "$stage" -cf dist/locasos-upgrade-amd64.tar .
+(cd dist && sha256sum locasos-upgrade-amd64.tar > locasos-upgrade-amd64.tar.sha256)
+echo "Built dist/locasos-upgrade-amd64.tar"
