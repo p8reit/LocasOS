@@ -152,7 +152,9 @@ func main() {
 			return
 		}
 		var data struct {
-			Models []struct{ Name string `json:"name"` } `json:"models"`
+			Models []struct {
+				Name string `json:"name"`
+			} `json:"models"`
 		}
 		if err := json.NewDecoder(io.LimitReader(resp.Body, 1048576)).Decode(&data); err != nil {
 			sendJSON(w, http.StatusOK, map[string]any{"ollama": "unavailable", "models": []string{}, "scope": "LocasOS"})
@@ -160,8 +162,12 @@ func main() {
 		}
 		models := make([]string, 0, len(data.Models))
 		for _, model := range data.Models {
-			if len(model.Name) <= 128 { models = append(models, model.Name) }
-			if len(models) == 100 { break }
+			if len(model.Name) <= 128 {
+				models = append(models, model.Name)
+			}
+			if len(models) == 100 {
+				break
+			}
 		}
 		sendJSON(w, http.StatusOK, map[string]any{"ollama": "available", "models": models, "scope": "LocasOS"})
 	})
