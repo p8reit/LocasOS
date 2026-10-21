@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,6 +142,10 @@ func (m *Manager) Setup(password string) error {
 }
 
 func (m *Manager) Login(password, remote string) (string, bool) {
+	remoteHost, _, err := net.SplitHostPort(remote)
+	if err == nil {
+		remote = remoteHost
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := time.Now()
@@ -227,7 +232,9 @@ func SafeMutation(r *http.Request) bool {
 }
 
 func DecodePassword(w http.ResponseWriter, r *http.Request) (string, error) {
-	var body struct { Password string `json:"password"` }
+	var body struct {
+		Password string `json:"password"`
+	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&body); err != nil {
