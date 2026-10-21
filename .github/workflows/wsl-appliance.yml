@@ -21,7 +21,7 @@ jobs:
           go-version: '1.23'
       - name: Validate scripts and Go
         run: |
-          bash -n packaging/wsl/firstboot.sh packaging/wsl/build-rootfs.sh packaging/wsl/install-ollama.sh packaging/wsl/repair-ollama.sh packaging/wsl/install-open-webui.sh packaging/wsl/locas-app-worker.sh packaging/wsl/upgrade-locas.sh
+          bash -n packaging/wsl/firstboot.sh packaging/wsl/build-rootfs.sh packaging/wsl/install-ollama.sh packaging/wsl/repair-ollama.sh packaging/wsl/install-open-webui.sh packaging/wsl/locas-app-worker.sh packaging/wsl/upgrade-locas.sh packaging/wsl/repair-ollama-runner.sh
           go test ./...
           test -z "$(gofmt -l ./cmd ./internal)"
       - name: Build image and checksummed rootfs
@@ -51,6 +51,8 @@ jobs:
           cp packaging/wsl/Test-Ollama-LocasOS.ps1 dist/
           cp packaging/wsl/repair-ollama.sh dist/
           cp packaging/wsl/Repair-Ollama-LocasOS.ps1 dist/
+          cp packaging/wsl/repair-ollama-runner.sh dist/
+          cp packaging/wsl/Repair-Ollama-Runner-LocasOS.ps1 dist/
           cp packaging/wsl/install-open-webui.sh dist/
           cp packaging/wsl/Install-OpenWebUI-LocasOS.ps1 dist/
           cp packaging/wsl/Upgrade-LocasOS.ps1 dist/
@@ -81,6 +83,8 @@ jobs:
             dist/Test-Ollama-LocasOS.ps1
             dist/repair-ollama.sh
             dist/Repair-Ollama-LocasOS.ps1
+            dist/repair-ollama-runner.sh
+            dist/Repair-Ollama-Runner-LocasOS.ps1
             dist/install-open-webui.sh
             dist/Install-OpenWebUI-LocasOS.ps1
             dist/Test-OpenWebUI-LocasOS.ps1
