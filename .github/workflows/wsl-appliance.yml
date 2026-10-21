@@ -21,7 +21,7 @@ jobs:
           go-version: '1.23'
       - name: Validate scripts and Go
         run: |
-          bash -n packaging/wsl/firstboot.sh packaging/wsl/build-rootfs.sh packaging/wsl/install-ollama.sh packaging/wsl/repair-ollama.sh packaging/wsl/install-open-webui.sh
+          bash -n packaging/wsl/firstboot.sh packaging/wsl/build-rootfs.sh packaging/wsl/install-ollama.sh packaging/wsl/repair-ollama.sh packaging/wsl/install-open-webui.sh packaging/wsl/locas-app-worker.sh
           go test ./...
           test -z "$(gofmt -l ./cmd ./internal)"
       - name: Build image and checksummed rootfs
