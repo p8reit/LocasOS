@@ -1,0 +1,20 @@
+name: LOCAS Engineering Task
+description: Bounded implementation task for LOCAS OS
+title: "LOS-: "
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and agent role
