@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -11,6 +12,9 @@ import (
 	"github.com/p8reit/LocasOS/internal/agentclient"
 	"github.com/p8reit/LocasOS/internal/server"
 )
+
+//go:embed index.html
+var landingPage []byte
 
 func main() {
 	addr := os.Getenv("LOCAS_LISTEN")
@@ -24,6 +28,14 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", server.NewHandler("locas-core"))
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
+		_, _ = w.Write(landingPage)
+	})
 	mux.HandleFunc("GET /internal/agent-health", func(w http.ResponseWriter, r *http.Request) {
 		// This intentionally exposes only a boolean dependency status, not host inventory or privileges.
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
