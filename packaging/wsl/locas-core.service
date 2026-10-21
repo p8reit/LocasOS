@@ -8,6 +8,9 @@ User=locas-core
 Group=locas-agent
 Environment=LOCAS_LISTEN=127.0.0.1:59420
 Environment=LOCAS_AGENT_SOCKET=/run/locas/agent.sock
+Environment=LOCAS_ADMIN_STATE_DIR=/var/lib/locas-core
+StateDirectory=locas-core
+StateDirectoryMode=0700
 ExecStart=/opt/locas/bin/locas-core
 Restart=on-failure
 NoNewPrivileges=yes
