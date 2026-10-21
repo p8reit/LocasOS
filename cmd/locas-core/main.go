@@ -206,7 +206,7 @@ func main() {
 		if err := decoder.Decode(&payload); err != nil || len(payload.Prompt) == 0 || len(payload.Prompt) > 6000 {
 			http.Error(w,"invalid chat request",http.StatusBadRequest);return
 		}
-		if len(payload.Model)==0 || len(payload.Model)>128 || strings.ContainsAny(payload.Model," /\\\\\t\n\r") {
+		if len(payload.Model)==0 || len(payload.Model)>128 || strings.ContainsAny(payload.Model, " /\\\\\\t\\n\\r") {
 			http.Error(w,"invalid model",http.StatusBadRequest);return
 		}
 		// Ollama itself rejects unknown/uninstalled models; only bounded model names pass.
