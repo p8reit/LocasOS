@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	_ "embed"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
