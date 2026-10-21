@@ -36,3 +36,17 @@ if ($pageText -notmatch 'LOCAS OS' -or $pageText -notmatch 'Your infrastructure'
     throw "Unexpected landing page content. Another service may own port $Port."
 }
 Write-Host "PASS: LOCAS OS landing page is available at http://127.0.0.1:$Port/"
+
+Write-Host "Checking administrator API..."
+$sessionJSON = & curl.exe --silent --show-error --fail --noproxy "*" --max-time 8 "http://127.0.0.1:$Port/api/session"
+if ($LASTEXITCODE -ne 0) { throw "Administrator session status endpoint unavailable." }
+$session = $sessionJSON | ConvertFrom-Json
+if ($null -eq $session.configured -or $null -eq $session.authenticated) {
+    throw "Unexpected administrator session response."
+}
+Write-Host "PASS: administrator status endpoint is available. Configured: $($session.configured)"
+$unauthCode = & curl.exe --silent --output NUL --write-out "%{http_code}" --noproxy "*" --max-time 8 "http://127.0.0.1:$Port/api/telemetry"
+if ($LASTEXITCODE -ne 0 -or $unauthCode -ne "401") {
+    throw "Security failure: unauthenticated telemetry must return 401, got $unauthCode."
+}
+Write-Host "PASS: unauthenticated telemetry is denied (HTTP 401)."
