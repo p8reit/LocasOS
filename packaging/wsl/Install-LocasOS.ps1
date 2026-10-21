@@ -33,8 +33,19 @@ if ($LASTEXITCODE -ne 0) {
     Write-Warning "First boot failed. The imported distro was preserved for diagnostics."
     throw "Run packaging/wsl/diagnose.ps1 to inspect logs. No automatic deletion was performed."
 }
-& $wsl.Source -d $DistributionName -- systemctl is-active --quiet locas-agent.service
-if ($LASTEXITCODE -ne 0) { throw "LOCAS agent not healthy; imported distro preserved for diagnostics." }
-& $wsl.Source -d $DistributionName -- systemctl is-active --quiet locas-core.service
-if ($LASTEXITCODE -ne 0) { throw "LOCAS core not healthy; imported distro preserved for diagnostics." }
+# systemd service startup is asynchronous in WSL; tolerate first-boot scheduling delays.
+$healthy = $false
+for ($attempt = 1; $attempt -le 30; $attempt++) {
+    & $wsl.Source -d $DistributionName -u root -- systemctl is-active --quiet locas-agent.service locas-core.service 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $healthy = $true
+        break
+    }
+    Start-Sleep -Seconds 2
+}
+if (-not $healthy) {
+    Write-Warning "LOCAS services did not become healthy. Import preserved for diagnostics."
+    & $wsl.Source -d $DistributionName -u root -- systemctl --no-pager status locas-agent.service locas-core.service
+    throw "LOCAS services not healthy after readiness checks; imported distro preserved."
+}
 Write-Host "LOCAS OS imported. Open http://127.0.0.1:59420/ for first-run administrator enrollment; browser launch is manual."
