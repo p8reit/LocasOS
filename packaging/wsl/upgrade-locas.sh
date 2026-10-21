@@ -12,11 +12,14 @@ checksum="${archive}.sha256"
 (cd "$(dirname "$archive")" && sha256sum -c "$(basename "$checksum")") || {
   echo "Upgrade checksum verification failed" >&2; exit 1;
 }
-tar -tf "$archive" | grep -qx './opt/locas/bin/locas-core' || {
+members="$(mktemp)"
+trap 'rm -f "$members"' EXIT
+tar -tf "$archive" > "$members"
+grep -qx './opt/locas/bin/locas-core' "$members" || {
   echo "Unexpected bundle: missing LOCAS core" >&2; exit 1;
 }
 # Upgrade bundles are trusted release inputs. Refuse traversal paths and links.
-if tar -tf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+if grep -Eq '(^/|(^|/)\.\.(/|$))' "$members"; then
   echo "Unsafe paths in archive" >&2; exit 1
 fi
 backup_dir=/var/lib/locas-upgrades
