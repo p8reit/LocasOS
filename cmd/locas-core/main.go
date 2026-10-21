@@ -130,6 +130,41 @@ func main() {
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = io.Copy(w, io.LimitReader(resp.Body, 65536))
 	})
+	mux.HandleFunc("GET /api/runtime", func(w http.ResponseWriter, r *http.Request) {
+		if !admins.Authenticated(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		// The target is fixed at loopback inside LocasOS. No user-defined URLs,
+		// arbitrary proxying, model downloads or runtime mutations.
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		client := &http.Client{Timeout: 2 * time.Second}
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:11434/api/tags", nil)
+		resp, err := client.Do(req)
+		if err != nil {
+			sendJSON(w, http.StatusOK, map[string]any{"ollama": "unavailable", "models": []string{}, "scope": "LocasOS"})
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			sendJSON(w, http.StatusOK, map[string]any{"ollama": "unavailable", "models": []string{}, "scope": "LocasOS"})
+			return
+		}
+		var data struct {
+			Models []struct{ Name string `json:"name"` } `json:"models"`
+		}
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 1048576)).Decode(&data); err != nil {
+			sendJSON(w, http.StatusOK, map[string]any{"ollama": "unavailable", "models": []string{}, "scope": "LocasOS"})
+			return
+		}
+		models := make([]string, 0, len(data.Models))
+		for _, model := range data.Models {
+			if len(model.Name) <= 128 { models = append(models, model.Name) }
+			if len(models) == 100 { break }
+		}
+		sendJSON(w, http.StatusOK, map[string]any{"ollama": "available", "models": models, "scope": "LocasOS"})
+	})
 	mux.HandleFunc("GET /internal/agent-health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
