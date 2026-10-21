@@ -3,7 +3,8 @@ set -Eeuo pipefail
 umask 027
 dir=/var/lib/locas
 request=$dir/app-install.request
-status=$dir/app-install.status
+install -d -m 0755 -o root -g root /var/lib/locas-apps
+status=/var/lib/locas-apps/app-install.status
 [[ -f "$request" && ! -L "$request" ]] || exit 0
 IFS= read -r app < "$request" || true
 rm -f -- "$request"
