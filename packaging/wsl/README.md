@@ -112,3 +112,9 @@ For the next test build, first back up anything important stored inside LocasOS.
 For unattended **disposable-only** tests, use `-Remove -Force`. If the installer directory remains after WSL unregister, inspect `%LOCALAPPDATA%\LocasOS\wsl`. To explicitly delete that remaining dedicated directory too, run `-Remove -PurgeResidual` (or include `-Force` to suppress the typed confirmation). The cleanup refuses symbolic links and does not delete anything outside the exact dedicated directory.
 
 This script **does not** run `wsl --shutdown`, unregister Ubuntu or Docker Desktop WSL distributions, stop containers, remove Docker images/volumes/networks, or run `docker system prune`. Docker readiness is checked read-only; `LocasOS` installation is still a WSL rootfs import rather than a Docker image. After cleanup, extract the next build archive to a new folder and run `Install-TestPackage.ps1`, followed by `Enable-LocasOS-Autostart.ps1` and `Test-LocasOS.ps1`.
+
+## Phase 6 read-only local runtime discovery
+
+After logging in, the Local AI runtime card checks `http://127.0.0.1:11434/api/tags` **inside the dedicated LocasOS WSL environment only**. The endpoint is hardcoded and reports a local Ollama status and model names; no command execution, model pull, remote model API, Docker socket access, or agent privilege change is enabled.
+
+A fresh Phase 6 test installation should display **Not installed / stopped**: Ollama is **not yet bundled** in this minimal appliance. This is the prerequisite for the next phase (isolated, GPU-aware Ollama service management). Existing Ollama on Windows or in another WSL distribution is not detected or modified.
