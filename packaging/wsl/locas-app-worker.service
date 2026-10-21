@@ -1,0 +1,12 @@
+[Unit]
+Description=LOCAS OS explicitly approved application installer
+After=locas-firstboot.service
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/sbin/locas-app-worker
+TimeoutStartSec=45min
+NoNewPrivileges=yes
+ProtectHome=yes
+[Install]
+WantedBy=multi-user.target
