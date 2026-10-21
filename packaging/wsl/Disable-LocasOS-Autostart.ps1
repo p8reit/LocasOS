@@ -9,6 +9,6 @@ if ($task) {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
     Write-Host "Removed $taskName scheduled task."
 } else { Write-Host "No LocasOS autostart task was registered." }
-$target = Join-Path $env:LOCALAPPDATA "LocasOS\\Windows\\Keep-LocasOS-Running.ps1"
+$target = Join-Path $env:LOCALAPPDATA "LocasOS\Windows\Keep-LocasOS-Running.ps1"
 if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Force }
 Write-Host "LocasOS distribution and data were not changed."
