@@ -6,7 +6,7 @@ Requires=locas-agent.service
 Type=simple
 User=locas-core
 Group=locas-agent
-Environment=LOCAS_LISTEN=127.0.0.1:8080
+Environment=LOCAS_LISTEN=127.0.0.1:59420
 Environment=LOCAS_AGENT_SOCKET=/run/locas/agent.sock
 ExecStart=/opt/locas/bin/locas-core
 Restart=on-failure
