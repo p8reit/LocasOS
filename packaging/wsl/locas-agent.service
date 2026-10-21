@@ -1,0 +1,20 @@
+[Unit]
+Description=LOCAS OS privileged local host agent
+After=locas-firstboot.service
+Requires=locas-firstboot.service
+[Service]
+Type=simple
+User=locas-agent
+Group=locas-agent
+RuntimeDirectory=locas
+RuntimeDirectoryMode=0750
+Environment=LOCAS_AGENT_SOCKET=/run/locas/agent.sock
+EnvironmentFile=/etc/locas/agent.env
+ExecStart=/opt/locas/bin/locas-agent
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/run/locas /var/lib/locas
+[Install]
+WantedBy=multi-user.target
