@@ -1,19 +1,33 @@
 package main
 
 import (
-	"github.com/p8reit/LocasOS/internal/server"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
+
+	"github.com/p8reit/LocasOS/internal/agentapi"
+	"github.com/p8reit/LocasOS/internal/gpu"
+	"github.com/p8reit/LocasOS/internal/hardware"
+	"github.com/p8reit/LocasOS/internal/peercred"
+	"github.com/p8reit/LocasOS/internal/server"
 )
 
 func main() {
 	socket := os.Getenv("LOCAS_AGENT_SOCKET")
 	if socket == "" {
 		socket = "/run/locas/agent.sock"
+	}
+	uidText := os.Getenv("LOCAS_CORE_UID")
+	if uidText == "" {
+		log.Fatal("LOCAS_CORE_UID is required to restrict agent socket clients")
+	}
+	uid, err := strconv.ParseUint(uidText, 10, 32)
+	if err != nil {
+		log.Fatalf("invalid LOCAS_CORE_UID: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(socket), 0750); err != nil {
 		log.Fatal(err)
@@ -28,7 +42,7 @@ func main() {
 	} else if !os.IsNotExist(err) {
 		log.Fatal(err)
 	}
-	listener, err := net.Listen("unix", socket)
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: socket, Net: "unix"})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,7 +50,10 @@ func main() {
 	if err := os.Chmod(socket, 0660); err != nil {
 		log.Fatal(err)
 	}
-	srv := &http.Server{Handler: server.NewHandler("locas-agent"), ReadHeaderTimeout: 5 * time.Second}
-	log.Printf("locas-agent listening on unix socket %s", socket)
-	log.Fatal(srv.Serve(listener))
+	mux := http.NewServeMux()
+	mux.Handle("/healthz", server.NewHandler("locas-agent"))
+	mux.Handle("/internal/telemetry", agentapi.NewTelemetryHandler(hardware.Collect, gpu.Probe))
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	log.Printf("locas-agent listening on unix socket %s (allowed uid: %d)", socket, uid)
+	log.Fatal(srv.Serve(&peercred.Listener{UnixListener: listener, ExpectedUID: uint32(uid)}))
 }

@@ -37,4 +37,4 @@ if ($LASTEXITCODE -ne 0) {
 if ($LASTEXITCODE -ne 0) { throw "LOCAS agent not healthy; imported distro preserved for diagnostics." }
 & $wsl.Source -d $DistributionName -- systemctl is-active --quiet locas-core.service
 if ($LASTEXITCODE -ne 0) { throw "LOCAS core not healthy; imported distro preserved for diagnostics." }
-Write-Host "LOCAS OS imported. Current preview has no authenticated dashboard installer; no browser was launched."
+Write-Host "LOCAS OS imported. Open http://127.0.0.1:59420/ for first-run administrator enrollment; browser launch is manual."
