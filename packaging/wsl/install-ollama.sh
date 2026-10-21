@@ -21,7 +21,7 @@ curl --fail --location --proto '=https' --tlsv1.2 --retry 3 --output "$work/olla
 # GNU tar lists archive members as either bin/ollama or ./bin/ollama.
 # Avoid piping tar to grep with pipefail: an early grep exit would signal SIGPIPE.
 tar --zstd -tf "$work/ollama.tar.zst" > "$work/contents.txt"
-if ! grep -Eq '^(\\./)?bin/ollama$' "$work/contents.txt"; then
+if ! grep -Eq '^(\./)?bin/ollama$' "$work/contents.txt"; then
   echo "Unexpected archive layout. First entries:" >&2
   head -n 15 "$work/contents.txt" >&2
   exit 1
