@@ -9,7 +9,7 @@ bash packaging/wsl/build-rootfs.sh
 cd dist && sha256sum -c locasos-wsl-amd64.tar.sha256
 ```
 
-The rootfs includes static `locas-core` and `locas-agent` binaries, systemd, dedicated service identities, local-only core binding, and an idempotent first-boot service. It does not install Docker Engine or frontend assets yet.
+The rootfs includes static `locas-core` and `locas-agent` binaries, systemd, dedicated service identities, local-only core binding, and an idempotent first-boot service. It does not install Docker Engine or frontend assets yet. The default core loopback port is **59420** (not 8080).
 
 A GitHub Actions PR workflow produces the same checksummed development archive for internal testing. GitHub Actions packaging success is **not proof of WSL2 boot success**.
 
@@ -35,3 +35,19 @@ The installer refuses existing distro names or directories, and never unregister
 - Confirm the systemd service ownership and socket access policy under real Windows WSL2.
 
 **Do not deploy this development image to a machine containing important application data.**
+
+## Removing the disposable WSL test distribution
+
+From **Windows PowerShell**, first back up anything you need inside LocasOS. The next command permanently deletes that distribution's Linux data:
+
+```powershell
+wsl.exe --terminate LocasOS
+wsl.exe --unregister LocasOS
+wsl.exe --list --verbose
+```
+
+These commands do **not** unregister or delete a separate `Ubuntu` distribution. Keep the extracted artifact folder if you want to inspect its scripts later. Check whether `%LOCALAPPDATA%\\LocasOS\\wsl` remains after unregistering before a future import; if it exists, review its contents and remove it manually only after confirming it contains no needed data. Do not remove any other WSL distribution directories.
+
+## Windows HTTP validation
+
+After importing, run `.\\Test-LocasOS.ps1` from the extracted artifact folder. The test checks systemd services and the JSON health response on `127.0.0.1:59420`. On standard WSL2, localhost forwarding may be unavailable if the distro exits between tests; open a separate `wsl -d LocasOS -u root -- bash` session and rerun to distinguish lifecycle from networking failures. A warning about the root systemd **user** session has been observed on Windows WSL2, despite successful system-level services; investigate separately.
