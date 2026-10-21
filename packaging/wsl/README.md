@@ -94,3 +94,21 @@ The new test build adds one-time local administrator enrollment at `http://127.0
 CPU, RAM and GPU telemetry is now proxied only for logged-in sessions. Agent telemetry remains on the Unix-domain socket and peer UID checks are enforced. There is no model execution, Docker control, or externally accessible management API. Keep the appliance bound to `127.0.0.1`; passwords and cookies are transmitted via local HTTP, **not encrypted TLS**. Do not reverse-proxy the preview or expose it on the LAN. If you lose the password, do not delete the credentials file automatically; state recovery requires a separate reviewed workflow.
 
 From Windows PowerShell after importing, execute `.\\Test-LocasOS.ps1` and confirm unauthenticated `/api/telemetry` returns HTTP 401. Then open the landing page and enroll, sign in and verify system metrics. This is not yet a production security audit.
+
+## Reset the disposable test appliance for the next build
+
+Run the included `Reset-LocasOS-Test.ps1` from **Windows PowerShell**. By default, it only audits the WSL distributions, dedicated LocasOS scheduled task, and Docker daemon availability:
+
+```powershell
+.\Reset-LocasOS-Test.ps1
+```
+
+For the next test build, first back up anything important stored inside LocasOS. **Unregistering permanently destroys its filesystem, administrator password state, models, and any other data in the dedicated appliance**. The following prompts for the exact text `REMOVE LOCASOS`:
+
+```powershell
+.\Reset-LocasOS-Test.ps1 -Remove
+```
+
+For unattended **disposable-only** tests, use `-Remove -Force`. If the installer directory remains after WSL unregister, inspect `%LOCALAPPDATA%\LocasOS\wsl`. To explicitly delete that remaining dedicated directory too, run `-Remove -PurgeResidual` (or include `-Force` to suppress the typed confirmation). The cleanup refuses symbolic links and does not delete anything outside the exact dedicated directory.
+
+This script **does not** run `wsl --shutdown`, unregister Ubuntu or Docker Desktop WSL distributions, stop containers, remove Docker images/volumes/networks, or run `docker system prune`. Docker readiness is checked read-only; `LocasOS` installation is still a WSL rootfs import rather than a Docker image. After cleanup, extract the next build archive to a new folder and run `Install-TestPackage.ps1`, followed by `Enable-LocasOS-Autostart.ps1` and `Test-LocasOS.ps1`.
