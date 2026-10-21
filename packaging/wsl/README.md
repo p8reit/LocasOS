@@ -71,3 +71,18 @@ To undo the task before uninstalling the distro:
 ```
 
 The disable script does not unregister LocasOS or delete its Linux disk. Autostart does not fix the WSL root systemd user-session warning, and has not yet been validated after a full Windows reboot.
+
+## Repair a visible autostart console (Phase 4)
+
+Task Scheduler exit status 267009 (0x41301) means **running**, not a failed launch. An earlier build allowed the keepalive PowerShell console to be visible. The updated launcher uses `-WindowStyle Hidden` and still runs as the current Windows user. The window behavior must be checked on real Windows; CI on Ubuntu cannot validate it.
+
+To replace only the Windows task without unregistering the WSL appliance, use the **newly extracted package**:
+
+```powershell
+.\Disable-LocasOS-Autostart.ps1
+.\Enable-LocasOS-Autostart.ps1
+Get-ScheduledTask -TaskName LocasOS-User-Autostart
+.\Test-LocasOS.ps1
+```
+
+Close all interactive Linux and installation PowerShell consoles and check the page again. If no popup appears and the landing page stays accessible, the repair works. A full sign-out/sign-in test is still required. To inspect task action: `(Get-ScheduledTask -TaskName LocasOS-User-Autostart).Actions | Format-List Execute,Arguments`.

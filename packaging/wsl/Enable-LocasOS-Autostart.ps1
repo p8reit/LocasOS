@@ -13,7 +13,7 @@ New-Item -ItemType Directory -Path $destination -Force | Out-Null
 $target = Join-Path $destination "Keep-LocasOS-Running.ps1"
 Copy-Item -LiteralPath $source -Destination $target -Force
 $ps = Join-Path $PSHOME "powershell.exe"
-$arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $target + '"'
+$arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $target + '"'
 $action = New-ScheduledTaskAction -Execute $ps -Argument $arguments
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
@@ -22,4 +22,5 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Se
 Start-ScheduledTask -TaskName $taskName
 Write-Host "Enabled LocasOS per-user autostart at Windows sign-in."
 Write-Host "Current status: $( (Get-ScheduledTask -TaskName $taskName).State )"
+Write-Host "The keepalive runs in a hidden PowerShell window. Test landing-page availability after closing your installer terminal."
 Write-Host "Verify with .\Test-LocasOS.ps1 then sign out/in to validate sign-in startup."
