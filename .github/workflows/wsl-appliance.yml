@@ -33,10 +33,20 @@ jobs:
           tar tf locasos-wsl-amd64.tar > tar-contents.txt
           grep -q 'opt/locas/bin/locas-core' tar-contents.txt
           grep -q 'etc/wsl.conf' tar-contents.txt
+      - name: Bundle Windows installer with archive
+        run: |
+          cp packaging/wsl/Install-LocasOS.ps1 dist/
+          cp packaging/wsl/Install-TestPackage.ps1 dist/
+          cp packaging/wsl/diagnose.ps1 dist/
+          cp packaging/wsl/README.md dist/TESTING.md
       - uses: actions/upload-artifact@v4
         with:
           name: locasos-wsl-dev-rootfs
           path: |
             dist/locasos-wsl-amd64.tar
             dist/locasos-wsl-amd64.tar.sha256
+            dist/Install-LocasOS.ps1
+            dist/Install-TestPackage.ps1
+            dist/diagnose.ps1
+            dist/TESTING.md
           retention-days: 7
