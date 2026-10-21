@@ -7,6 +7,11 @@ archive="${1:?upgrade archive required}"
   echo "Not a provisioned LocasOS appliance" >&2; exit 1;
 }
 [[ -f "$archive" ]] || { echo "Upgrade bundle not found: $archive" >&2; exit 1; }
+checksum="${archive}.sha256"
+[[ -f "$checksum" ]] || { echo "Missing archive checksum" >&2; exit 1; }
+(cd "$(dirname "$archive")" && sha256sum -c "$(basename "$checksum")") || {
+  echo "Upgrade checksum verification failed" >&2; exit 1;
+}
 tar -tf "$archive" | grep -qx './opt/locas/bin/locas-core' || {
   echo "Unexpected bundle: missing LOCAS core" >&2; exit 1;
 }
