@@ -21,10 +21,16 @@ func TestTelemetry(t *testing.T) {
 	)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/internal/telemetry", nil))
-	if w.Code != http.StatusOK { t.Fatalf("status %d", w.Code) }
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d", w.Code)
+	}
 	var data Snapshot
-	if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil { t.Fatal(err) }
-	if data.Host.Node != "node-1" || len(data.GPUs) != 1 || data.GPUStatus != "available" { t.Fatalf("%+v", data) }
+	if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil {
+		t.Fatal(err)
+	}
+	if data.Host.Node != "node-1" || len(data.GPUs) != 1 || data.GPUStatus != "available" {
+		t.Fatalf("%+v", data)
+	}
 }
 func TestUnavailableGPU(t *testing.T) {
 	handler := NewTelemetryHandler(
@@ -33,23 +39,39 @@ func TestUnavailableGPU(t *testing.T) {
 	)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/internal/telemetry", nil))
-	if w.Code != http.StatusOK { t.Fatalf("status %d", w.Code) }
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d", w.Code)
+	}
 	var data Snapshot
-	if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil { t.Fatal(err) }
-	if data.GPUStatus != "unavailable" || len(data.GPUs) != 0 { t.Fatalf("%+v", data) }
+	if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil {
+		t.Fatal(err)
+	}
+	if data.GPUStatus != "unavailable" || len(data.GPUs) != 0 {
+		t.Fatalf("%+v", data)
+	}
 }
 func TestHostFailure(t *testing.T) {
 	handler := NewTelemetryHandler(
 		func() (hardware.Snapshot, error) { return hardware.Snapshot{}, errors.New("host failed") },
-		func(context.Context) ([]gpu.Device, error) { t.Fatal("GPU called after host failure"); return nil, nil },
+		func(context.Context) ([]gpu.Device, error) {
+			t.Fatal("GPU called after host failure")
+			return nil, nil
+		},
 	)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/internal/telemetry", nil))
-	if w.Code != http.StatusServiceUnavailable { t.Fatalf("status %d", w.Code) }
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status %d", w.Code)
+	}
 }
 func TestRejectOtherMethods(t *testing.T) {
-	h := NewTelemetryHandler(func()(hardware.Snapshot,error){return hardware.Snapshot{},nil}, func(context.Context)([]gpu.Device,error){return nil,nil})
+	h := NewTelemetryHandler(
+		func() (hardware.Snapshot, error) { return hardware.Snapshot{}, nil },
+		func(context.Context) ([]gpu.Device, error) { return nil, nil },
+	)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/internal/telemetry", nil))
-	if w.Code != http.StatusMethodNotAllowed { t.Fatalf("status %d", w.Code) }
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status %d", w.Code)
+	}
 }
