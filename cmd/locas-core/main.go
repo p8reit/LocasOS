@@ -235,7 +235,7 @@ func main() {
 			http.Error(w, "invalid chat request", http.StatusBadRequest)
 			return
 		}
-		if len(payload.Model) == 0 || len(payload.Model) > 128 || strings.ContainsAny(payload.Model, " /\\\t\n\r") {
+		if len(payload.Model) == 0 || len(payload.Model) > 128 || strings.ContainsAny(payload.Model, " /") {
 			http.Error(w, "invalid model", http.StatusBadRequest)
 			return
 		}
