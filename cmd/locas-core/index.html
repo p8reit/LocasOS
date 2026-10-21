@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LOCAS OS | Local AI Appliance</title>
+<style>
+:root{color-scheme:dark;--bg:#0b111c;--card:#151f2e;--line:#2b3b50;--ink:#e8f0ff;--muted:#9aacbf;--accent:#70e4c3}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 70% 0%,#173046 0%,var(--bg) 55%);font:16px system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);min-height:100vh}
+.wrap{max-width:1020px;margin:auto;padding:30px 24px 72px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:24px}
+.logo{font-size:19px;font-weight:800;letter-spacing:.12em}.logo span{color:var(--accent)}.tag{color:var(--muted);font-size:13px}
+main{padding-top:76px}h1{font-size:clamp(36px,6vw,66px);line-height:1.08;letter-spacing:-.05em;margin:0 0 24px}h1 em{font-style:normal;color:var(--accent)}
+.lead{font-size:19px;max-width:710px;color:var(--muted);line-height:1.65}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:52px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:17px;padding:26px}
+.card h2{font-size:18px;margin:0 0 12px}.card p{font-size:14px;line-height:1.6;color:var(--muted);margin:0}
+.status{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);padding:10px 14px;border-radius:999px;background:var(--card);font-size:13px;color:var(--muted)}
+.dot{width:9px;height:9px;border-radius:50%;background:#f0ac72}.dot.ok{background:var(--accent)}
+footer{margin-top:66px;padding-top:24px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+code{color:var(--accent)}a{color:var(--accent)}
+</style></head>
+<body><div class="wrap"><header><div class="logo">LOCAS<span> OS</span></div><div class="tag">LOCAL-FIRST AI APPLIANCE · PREVIEW</div></header>
+<main><div class="status"><span id="dot" class="dot"></span><span id="state">Checking local control plane…</span></div>
+<h1>Your infrastructure.<br><em>Your intelligence.</em></h1>
+<p class="lead">Welcome to LOCAS OS. The dedicated local control plane is installed and responding. This is the first appliance landing-page preview; your models and data remain on your machine.</p>
+<section class="grid" aria-label="Appliance modules">
+<div class="card"><h2>Control plane</h2><p>Core service is online. The health endpoint is available at <code>/healthz</code>.</p></div>
+<div class="card"><h2>Host monitoring</h2><p>CPU, memory, and GPU telemetry will appear here when the authenticated dashboard is ready.</p></div>
+<div class="card"><h2>Administrator setup</h2><p>Secure enrollment is not available in this preview. Management actions remain disabled.</p></div>
+</section></main><footer>LOCAS OS · WSL2 development preview · Listening on localhost only · <a href="/healthz">Check API health</a></footer></div>
+<script>
+(async function(){const state=document.getElementById('state'),dot=document.getElementById('dot');try{const r=await fetch('/healthz',{cache:'no-store'});const data=await r.json();if(!r.ok||data.component!=='locas-core'||data.status!=='ok')throw Error('unhealthy');state.textContent='Local control plane online';dot.classList.add('ok')}catch(_){state.textContent='Control plane status unavailable'}})();
+</script></body></html>
