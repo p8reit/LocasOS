@@ -27,5 +27,14 @@ try {
     # Do not unregister a distro automatically. A partial import requires explicit operator review.
     throw
 }
-Write-Host "Imported $DistributionName successfully."
-Write-Host "First-boot setup and local dashboard launch are not yet available in this development preview."
+Write-Host "Imported $DistributionName. Starting first-boot provisioning..."
+& $wsl.Source -d $DistributionName -- systemctl start locas-firstboot.service
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "First boot failed. The imported distro was preserved for diagnostics."
+    throw "Run packaging/wsl/diagnose.ps1 to inspect logs. No automatic deletion was performed."
+}
+& $wsl.Source -d $DistributionName -- systemctl is-active --quiet locas-agent.service
+if ($LASTEXITCODE -ne 0) { Write-Warning "LOCAS agent not healthy; inspect systemd logs." }
+& $wsl.Source -d $DistributionName -- systemctl is-active --quiet locas-core.service
+if ($LASTEXITCODE -ne 0) { Write-Warning "LOCAS core not healthy; inspect systemd logs." }
+Write-Host "LOCAS OS imported. Current preview has no authenticated dashboard installer; no browser was launched."
