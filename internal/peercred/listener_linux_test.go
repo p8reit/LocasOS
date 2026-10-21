@@ -1,12 +1,12 @@
 package peercred
 
 import (
-	"net"
 	"io"
-	"time"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestListenerAcceptAuthorized(t *testing.T) {
