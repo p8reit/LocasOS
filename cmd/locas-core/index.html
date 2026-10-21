@@ -2,29 +2,71 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>LOCAS OS | Local AI Appliance</title>
 <style>
-:root{color-scheme:dark;--bg:#0b111c;--card:#151f2e;--line:#2b3b50;--ink:#e8f0ff;--muted:#9aacbf;--accent:#70e4c3}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 70% 0%,#173046 0%,var(--bg) 55%);font:16px system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);min-height:100vh}
-.wrap{max-width:1020px;margin:auto;padding:30px 24px 72px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:24px}
-.logo{font-size:19px;font-weight:800;letter-spacing:.12em}.logo span{color:var(--accent)}.tag{color:var(--muted);font-size:13px}
-main{padding-top:76px}h1{font-size:clamp(36px,6vw,66px);line-height:1.08;letter-spacing:-.05em;margin:0 0 24px}h1 em{font-style:normal;color:var(--accent)}
-.lead{font-size:19px;max-width:710px;color:var(--muted);line-height:1.65}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:52px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:17px;padding:26px}
-.card h2{font-size:18px;margin:0 0 12px}.card p{font-size:14px;line-height:1.6;color:var(--muted);margin:0}
-.status{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);padding:10px 14px;border-radius:999px;background:var(--card);font-size:13px;color:var(--muted)}
-.dot{width:9px;height:9px;border-radius:50%;background:#f0ac72}.dot.ok{background:var(--accent)}
-footer{margin-top:66px;padding-top:24px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
-code{color:var(--accent)}a{color:var(--accent)}
-</style></head>
-<body><div class="wrap"><header><div class="logo">LOCAS<span> OS</span></div><div class="tag">LOCAL-FIRST AI APPLIANCE · PREVIEW</div></header>
-<main><div class="status"><span id="dot" class="dot"></span><span id="state">Checking local control plane…</span></div>
+:root{color-scheme:dark;--bg:#09111c;--card:#142237;--line:#284054;--ink:#edf6ff;--muted:#9eb2c6;--accent:#63e8c0}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 70% 0%,#17394c 0%,var(--bg) 58%);font:16px system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);min-height:100vh}
+.wrap{max-width:1070px;margin:auto;padding:30px 24px 70px}header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:22px}
+.logo{font-size:20px;font-weight:800;letter-spacing:.12em}.logo span{color:var(--accent)}.tag{font-size:12px;color:var(--muted)}
+main{padding-top:58px}h1{font-size:clamp(37px,5.5vw,61px);letter-spacing:-.045em;line-height:1.07;margin:0 0 18px}h1 em{font-style:normal;color:var(--accent)}
+.lead{color:var(--muted);line-height:1.65;max-width:730px;font-size:18px}
+.status{display:inline-flex;gap:9px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:99px;font-size:13px;color:var(--muted);padding:9px 14px;margin-bottom:28px}
+.dot{width:8px;height:8px;border-radius:50%;background:#f0a872}.dot.ok{background:var(--accent)}
+.panel{margin-top:38px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:28px}
+h2{font-size:22px;letter-spacing:-.02em;margin:0 0 12px}p{line-height:1.55}.muted{color:var(--muted);font-size:14px}
+form{display:grid;gap:14px;max-width:480px;margin-top:24px}
+label{font-size:14px;font-weight:650;display:grid;gap:8px}
+input{width:100%;padding:13px 15px;border-radius:10px;border:1px solid #3a526a;background:#0a1625;color:var(--ink);font:inherit}
+button{border:0;border-radius:10px;padding:12px 18px;background:var(--accent);color:#06271f;font-weight:800;font-size:15px;cursor:pointer}
+button.secondary{background:#293c51;color:var(--ink)}button:disabled{opacity:.55;cursor:wait}
+.actions{display:flex;justify-content:space-between;align-items:center;gap:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:18px;margin-top:22px}
+.card{background:#0d1a2b;border:1px solid var(--line);border-radius:14px;padding:22px}
+.card h3{margin:0 0 12px;font-size:14px;color:var(--muted);font-weight:650}
+.value{font-weight:780;letter-spacing:-.03em;font-size:29px}
+.small{font-size:13px;color:var(--muted);margin-top:10px}
+progress{width:100%;height:9px;margin-top:15px;accent-color:var(--accent)}
+.error{color:#ffbd9c;font-size:14px;min-height:18px}
+[hidden]{display:none!important}
+footer{border-top:1px solid var(--line);padding-top:22px;margin-top:55px;color:var(--muted);font-size:13px}
+a{color:var(--accent)}
+</style></head><body><div class="wrap">
+<header><div class="logo">LOCAS<span> OS</span></div><div class="tag">PRIVATE · LOCAL-FIRST · WSL2 PREVIEW</div></header>
+<main><div class="status"><span class="dot" id="dot"></span><span id="state">Checking local control plane…</span></div>
 <h1>Your infrastructure.<br><em>Your intelligence.</em></h1>
-<p class="lead">Welcome to LOCAS OS. The dedicated local control plane is installed and responding. This is the first appliance landing-page preview; your models and data remain on your machine.</p>
-<section class="grid" aria-label="Appliance modules">
-<div class="card"><h2>Control plane</h2><p>Core service is online. The health endpoint is available at <code>/healthz</code>.</p></div>
-<div class="card"><h2>Host monitoring</h2><p>CPU, memory, and GPU telemetry will appear here when the authenticated dashboard is ready.</p></div>
-<div class="card"><h2>Administrator setup</h2><p>Secure enrollment is not available in this preview. Management actions remain disabled.</p></div>
-</section></main><footer>LOCAS OS · WSL2 development preview · Listening on localhost only · <a href="/healthz">Check API health</a></footer></div>
+<p class="lead">Welcome to LOCAS OS. Run and observe your local AI appliance from a single private control plane. Management stays bound to localhost.</p>
+<section class="panel" id="loading"><h2>Initializing...</h2><p class="muted">Checking administrator enrollment status.</p></section>
+<section class="panel" id="setup" hidden>
+<h2>Create your administrator password</h2>
+<p class="muted">This is the first-run setup for this appliance. Choose a unique password with at least 14 characters. Credentials are stored in the LOCAS OS Linux filesystem, not a cloud service.</p>
+<form id="setupform"><label>New password<input id="newpassword" type="password" required minlength="14" maxlength="256" autocomplete="new-password"></label>
+<label>Confirm password<input id="confirm" type="password" required minlength="14" maxlength="256" autocomplete="new-password"></label>
+<button type="submit">Create administrator</button></form><p class="error" id="setuperror" role="alert"></p>
+</section>
+<section class="panel" id="login" hidden><h2>Administrator sign in</h2>
+<p class="muted">Your browser session is local and expires after eight hours or when the control plane restarts.</p>
+<form id="loginform"><label>Password<input id="password" type="password" required autocomplete="current-password"></label>
+<button type="submit">Sign in</button></form><p class="error" id="loginerror" role="alert"></p></section>
+<section id="dashboard" hidden>
+<div class="panel"><div class="actions"><div><h2>System overview</h2><p class="muted">Read-only telemetry from the local LOCAS agent · refreshes every fifteen seconds</p></div><button class="secondary" id="logout" type="button">Sign out</button></div>
+<div class="grid">
+<div class="card"><h3>Host</h3><div class="value" id="node">—</div><div class="small">WSL2 appliance hostname</div></div>
+<div class="card"><h3>Logical CPUs</h3><div class="value" id="cpu">—</div><div class="small">Available to LOCAS OS, not CPU usage</div></div>
+<div class="card"><h3>Memory used</h3><div class="value" id="memory">—</div><progress id="memprogress" value="0" max="100"></progress><div class="small" id="memdetail">Waiting for host metrics</div></div>
+<div class="card"><h3>GPU discovery</h3><div class="value" id="gpustatus">—</div><div class="small" id="gpudetail">Waiting for NVIDIA probe</div></div>
+</div><p class="error" id="telemetryerror" role="status"></p></div>
+</section>
+</main><footer>LOCAS OS · Test appliance · <a href="/healthz">API health</a> · Local access only. No Docker controls or external model connections are enabled.</footer>
+</div>
 <script>
-(async function(){const state=document.getElementById('state'),dot=document.getElementById('dot');try{const r=await fetch('/healthz',{cache:'no-store'});const data=await r.json();if(!r.ok||data.component!=='locas-core'||data.status!=='ok')throw Error('unhealthy');state.textContent='Local control plane online';dot.classList.add('ok')}catch(_){state.textContent='Control plane status unavailable'}})();
+const q=id=>document.getElementById(id);
+const sections=['loading','setup','login','dashboard'];
+let timer=null;
+function show(id){sections.forEach(s=>q(s).hidden=s!==id)}
+async function request(url,options={}){const r=await fetch(url,{cache:'no-store',credentials:'same-origin',...options});if(!r.ok)throw Error('HTTP '+r.status);return r.json()}
+function post(url,password){return request(url,{method:'POST',headers:{'Content-Type':'application/json','X-Locas-Request':'1'},body:JSON.stringify({password})})}
+function clean(){if(timer){clearInterval(timer);timer=null}}
+async function initialize(){try{const h=await request('/healthz');q('state').textContent=h.status==='ok'?'Local control plane online':'Health degraded';q('dot').classList.toggle('ok',h.status==='ok');const s=await request('/api/session');if(!s.configured){show('setup');clean()}else if(!s.authenticated){show('login');clean()}else{show('dashboard');refresh();clean();timer=setInterval(refresh,15000)}}catch(e){q('state').textContent='Control plane unavailable';q('loading').querySelector('p').textContent=e.message}}
+async function refresh(){try{const d=await request('/api/telemetry');q('node').textContent=d.host.node||'Unknown';q('cpu').textContent=String(d.host.cpus??'—');const total=d.host.memory_total_mib||0,avail=d.host.memory_available_mib||0,used=Math.max(0,total-avail),pct=total?Math.round(100*used/total):0;q('memory').textContent=total?pct+'%':'Unavailable';q('memprogress').value=pct;q('memdetail').textContent=total?Math.round(used/1024)+' / '+(total/1024).toFixed(1)+' GiB used':'Memory not reported';const g=d.gpus||[];q('gpustatus').textContent=d.gpu_status==='unavailable'?'Unavailable':g.length+' detected';q('gpudetail').textContent=g.length?g.map(v=>v.name+' · '+v.utilization_percent+'% load · '+v.memory_used_mib+'/'+v.memory_total_mib+' MiB').join(' | '):'No visible NVIDIA GPU; WSL driver exposure may be unavailable';q('telemetryerror').textContent=''}catch(e){q('telemetryerror').textContent='Telemetry refresh failed: '+e.message;if(String(e.message).includes('401')){clean();initialize()}}}
+q('setupform').addEventListener('submit',async e=>{e.preventDefault();const a=q('newpassword').value,b=q('confirm').value;if(a!==b){q('setuperror').textContent='Passwords do not match';return}try{await post('/api/setup',a);q('newpassword').value='';q('confirm').value='';q('setuperror').textContent='';await initialize()}catch(err){q('setuperror').textContent='Unable to create administrator: '+err.message}});
+q('loginform').addEventListener('submit',async e=>{e.preventDefault();try{await post('/api/login',q('password').value);q('password').value='';q('loginerror').textContent='';await initialize()}catch(err){q('loginerror').textContent='Login failed. Check your password or try again shortly.'}});
+q('logout').addEventListener('click',async()=>{try{await request('/api/logout',{method:'POST',headers:{'Content-Type':'application/json','X-Locas-Request':'1'},body:'{}'});clean();await initialize()}catch(e){q('telemetryerror').textContent='Sign out failed'}});initialize();
 </script></body></html>
