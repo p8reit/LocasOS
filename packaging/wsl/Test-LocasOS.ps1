@@ -50,3 +50,9 @@ if ($LASTEXITCODE -ne 0 -or $unauthCode -ne "401") {
     throw "Security failure: unauthenticated telemetry must return 401, got $unauthCode."
 }
 Write-Host "PASS: unauthenticated telemetry is denied (HTTP 401)."
+
+$runtimeCode = & curl.exe --silent --output NUL --write-out "%{http_code}" --noproxy "*" --max-time 8 "http://127.0.0.1:$Port/api/runtime"
+if ($LASTEXITCODE -ne 0 -or $runtimeCode -ne "401") {
+    throw "Security failure: anonymous runtime inventory must return HTTP 401, got $runtimeCode."
+}
+Write-Host "PASS: anonymous runtime inventory is denied (HTTP 401)."
