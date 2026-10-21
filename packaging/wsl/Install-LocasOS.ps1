@@ -34,7 +34,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Run packaging/wsl/diagnose.ps1 to inspect logs. No automatic deletion was performed."
 }
 & $wsl.Source -d $DistributionName -- systemctl is-active --quiet locas-agent.service
-if ($LASTEXITCODE -ne 0) { Write-Warning "LOCAS agent not healthy; inspect systemd logs." }
+if ($LASTEXITCODE -ne 0) { throw "LOCAS agent not healthy; imported distro preserved for diagnostics." }
 & $wsl.Source -d $DistributionName -- systemctl is-active --quiet locas-core.service
-if ($LASTEXITCODE -ne 0) { Write-Warning "LOCAS core not healthy; inspect systemd logs." }
+if ($LASTEXITCODE -ne 0) { throw "LOCAS core not healthy; imported distro preserved for diagnostics." }
 Write-Host "LOCAS OS imported. Current preview has no authenticated dashboard installer; no browser was launched."
