@@ -155,3 +155,19 @@ After importing this updated rootfs and enrolling the LOCAS OS administrator, op
 The manager is intentionally installation-only in this preview. Docker and Ollama binary updates, removal, backup/restore, app pinning, detailed progress logs, and post-install first-run shared identity are not implemented. Open WebUI has a separate login. Internet access is necessary for installing packages; local inference does not use remote inference providers. No agentic tool execution is enabled.
 
 **Important for existing testers:** changing the installed LOCAS OS rootfs is still a destructive reimport in the current test installer. Back up all data, including `/var/lib/locas-ollama/models` and `/var/lib/locas-open-webui`, before unregistering. Do not use `Reset-LocasOS-Test.ps1` if you need to retain those without backup.
+
+## Phase 9 — In-place LOCAS OS upgrades
+
+Every new WSL package now includes a `locasos-upgrade-amd64.tar` with SHA-256 file and `Upgrade-LocasOS.ps1`. Unlike `Install-TestPackage.ps1`, this targets the **existing** `LocasOS` distribution and does not unregister or re-import WSL, reinstall Ollama, or remove Docker applications and models.
+
+Download and extract the latest CI artifact, then run in Windows PowerShell:
+
+```powershell
+.\\Upgrade-LocasOS.ps1
+.\\Upgrade-LocasOS.ps1 -Apply
+.\\Test-LocasOS.ps1
+```
+
+The first command previews without changes. The second requires typing `UPGRADE LOCASOS`, validates the package SHA-256, creates a private tar backup of previous LOCAS core/agent binaries and their service units at `/var/lib/locas-upgrades/`, installs updated binaries and allowlisted root-managed app worker services, and checks the core and agent services. On a failed upgrade, previous core binaries/service units are restored. Existing app data directories `/var/lib/locas-core`, `/var/lib/locas-ollama`, `/var/lib/locas-open-webui`, `/var/lib/docker`, and existing user home directories are not included in the upgrade archive.
+
+**This is a development preview**, not an OS/package-manager upgrade: dependency and database migrations, cross-version compatibility, automatic rollback of newly introduced files, update signing, and model/chat data backups are not yet supported. The automated backup includes only LOCAS executable files and selected systemd units, NOT irreplaceable user/model data. Keep separate backups for anything valuable.
