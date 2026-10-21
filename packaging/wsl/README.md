@@ -118,3 +118,15 @@ This script **does not** run `wsl --shutdown`, unregister Ubuntu or Docker Deskt
 After logging in, the Local AI runtime card checks `http://127.0.0.1:11434/api/tags` **inside the dedicated LocasOS WSL environment only**. The endpoint is hardcoded and reports a local Ollama status and model names; no command execution, model pull, remote model API, Docker socket access, or agent privilege change is enabled.
 
 A fresh Phase 6 test installation should display **Not installed / stopped**: Ollama is **not yet bundled** in this minimal appliance. This is the prerequisite for the next phase (isolated, GPU-aware Ollama service management). Existing Ollama on Windows or in another WSL distribution is not detected or modified.
+
+## Phase 6B/6C — Explicitly install isolated Ollama and use local chat
+
+The appliance does not download or install Ollama on import. After first-run admin setup and verifying GPU visibility, from Windows PowerShell run the included installer **only if you agree to download the official Ollama Linux archive**:
+
+```powershell
+.\Install-Ollama-LocasOS.ps1 -AcceptDownload
+```
+
+This downloads `https://ollama.com/download/ollama-linux-amd64.tar.zst` into LocasOS and extracts it into `/usr/local`. This prototype does **not** pin a signed release digest: verify supply-chain requirements before production use. The `locas-ollama` service starts under its own unprivileged user, listens on `127.0.0.1:11434` inside the dedicated LocasOS distro, and stores models under `/var/lib/locas-ollama/models`. On import, the service unit remains disabled until installation is requested. The script refuses overwriting an already present binary. No other WSL distributions or Docker workloads are modified.
+
+The authenticated dashboard can request an explicitly allowlisted small model download from Ollama's model registry (network activity and disk usage expected), then send a local chat prompt. Model execution never calls a remote inference API. Users must opt into both runtime installation and model downloads. GPU accelerator use must be confirmed in real WSL testing; GPU monitoring alone does not prove offloading. Manual verification: `wsl -d LocasOS -u root -- /usr/local/bin/ollama ps`, and check processor reports GPU.

@@ -21,7 +21,7 @@ jobs:
           go-version: '1.23'
       - name: Validate scripts and Go
         run: |
-          bash -n packaging/wsl/firstboot.sh packaging/wsl/build-rootfs.sh
+          bash -n packaging/wsl/firstboot.sh packaging/wsl/build-rootfs.sh packaging/wsl/install-ollama.sh
           go test ./...
           test -z "$(gofmt -l ./cmd ./internal)"
       - name: Build image and checksummed rootfs
@@ -43,6 +43,8 @@ jobs:
           cp packaging/wsl/Enable-LocasOS-Autostart.ps1 dist/
           cp packaging/wsl/Disable-LocasOS-Autostart.ps1 dist/
           cp packaging/wsl/Reset-LocasOS-Test.ps1 dist/
+          cp packaging/wsl/Install-Ollama-LocasOS.ps1 dist/
+          cp packaging/wsl/Test-Ollama-LocasOS.ps1 dist/
           cp packaging/wsl/README.md dist/TESTING.md
       - uses: actions/upload-artifact@v4
         with:
@@ -58,5 +60,7 @@ jobs:
             dist/Enable-LocasOS-Autostart.ps1
             dist/Disable-LocasOS-Autostart.ps1
             dist/Reset-LocasOS-Test.ps1
+            dist/Install-Ollama-LocasOS.ps1
+            dist/Test-Ollama-LocasOS.ps1
             dist/TESTING.md
           retention-days: 7

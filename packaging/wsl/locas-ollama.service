@@ -1,0 +1,21 @@
+[Unit]
+Description=LOCAS OS isolated Ollama inference
+After=network.target
+[Service]
+Type=simple
+User=locas-ollama
+Group=locas-ollama
+Environment=OLLAMA_HOST=127.0.0.1:11434
+Environment=OLLAMA_MODELS=/var/lib/locas-ollama/models
+Environment=OLLAMA_NOHISTORY=1
+StateDirectory=locas-ollama
+StateDirectoryMode=0700
+ExecStart=/usr/local/bin/ollama serve
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/locas-ollama
+[Install]
+WantedBy=multi-user.target
