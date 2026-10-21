@@ -1,6 +1,10 @@
 package gpu
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestParseCSV(t *testing.T) {
 	d, e := ParseCSV("NVIDIA GeForce RTX 3060, 12288, 4096, 25\n")
@@ -13,5 +17,18 @@ func TestReject(t *testing.T) {
 		if _, e := ParseCSV(s); e == nil {
 			t.Errorf("accepted %q", s)
 		}
+	}
+}
+
+func TestFindNvidiaSMIOnPath(t *testing.T) {
+	dir := t.TempDir()
+	binary := filepath.Join(dir, "nvidia-smi")
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	got, err := FindNvidiaSMI()
+	if err != nil || got != binary {
+		t.Fatalf("got %q, err %v", got, err)
 	}
 }

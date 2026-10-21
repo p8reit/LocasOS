@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -40,9 +41,25 @@ func ParseCSV(s string) ([]Device, error) {
 func Probe(parent context.Context) ([]Device, error) {
 	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu", "--format=csv,noheader,nounits").Output()
+	binary, err := FindNvidiaSMI()
+	if err != nil {
+		return nil, err
+	}
+	out, err := exec.CommandContext(ctx, binary, "--query-gpu=name,memory.total,memory.used,utilization.gpu", "--format=csv,noheader,nounits").Output()
 	if err != nil {
 		return nil, err
 	}
 	return ParseCSV(string(out))
+}
+
+// FindNvidiaSMI prefers the WSL host-provided utility when it is not on PATH.
+func FindNvidiaSMI() (string, error) {
+	if path, err := exec.LookPath("nvidia-smi"); err == nil {
+		return path, nil
+	}
+	const wslPath = "/usr/lib/wsl/lib/nvidia-smi"
+	if info, err := os.Stat(wslPath); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
+		return wslPath, nil
+	}
+	return "", errors.New("nvidia-smi not found in PATH or WSL host location")
 }
