@@ -18,7 +18,7 @@ jobs:
           if [ -f go.mod ]; then go test ./...; else echo "Go scaffold pending: tracked in LOS-002"; fi
       - name: Go formatting
         run: |
-          if [ -f go.mod ]; then test -z "$(gofmt -l ./cmd ./internal 2>/dev/null)"; fi
+          if [ -f go.mod ]; then files="$(gofmt -l ./cmd ./internal)"; printf "%s\\n" "$files"; test -z "$files"; fi
   shell:
     runs-on: ubuntu-24.04
     steps:
