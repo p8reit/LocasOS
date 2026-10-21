@@ -10,5 +10,5 @@ docker build -f packaging/wsl/rootfs.Dockerfile -t "$tag" .
 container="$(docker create "$tag")"
 trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 docker export "$container" -o dist/locasos-wsl-amd64.tar
-sha256sum dist/locasos-wsl-amd64.tar > dist/locasos-wsl-amd64.tar.sha256
+(cd dist && sha256sum locasos-wsl-amd64.tar > locasos-wsl-amd64.tar.sha256)
 echo "Built dist/locasos-wsl-amd64.tar"
