@@ -1,16 +1,17 @@
 package main
 
 import (
-	"github.com/p8reit/LocasOS/internal/server"
-	"github.com/p8reit/LocasOS/internal/agentapi"
-	"github.com/p8reit/LocasOS/internal/hardware"
-	"github.com/p8reit/LocasOS/internal/gpu"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/p8reit/LocasOS/internal/agentapi"
+	"github.com/p8reit/LocasOS/internal/gpu"
+	"github.com/p8reit/LocasOS/internal/hardware"
+	"github.com/p8reit/LocasOS/internal/server"
 )
 
 func main() {
