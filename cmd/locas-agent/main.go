@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"github.com/p8reit/LocasOS/internal/peercred"
 	"time"
 )
 
@@ -28,6 +30,10 @@ func main() {
 	} else if !os.IsNotExist(err) {
 		log.Fatal(err)
 	}
+	uidText := os.Getenv("LOCAS_CORE_UID")
+	if uidText == "" { log.Fatal("LOCAS_CORE_UID is required to restrict agent socket clients") }
+	uid, err := strconv.ParseUint(uidText, 10, 32)
+	if err != nil { log.Fatalf("invalid LOCAS_CORE_UID: %v", err) }
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		log.Fatal(err)
@@ -38,5 +44,5 @@ func main() {
 	}
 	srv := &http.Server{Handler: server.NewHandler("locas-agent"), ReadHeaderTimeout: 5 * time.Second}
 	log.Printf("locas-agent listening on unix socket %s", socket)
-	log.Fatal(srv.Serve(listener))
+	log.Fatal(srv.Serve(&peercred.Listener{UnixListener: listener.(*net.UnixListener), ExpectedUID: uint32(uid)}))
 }
