@@ -58,9 +58,9 @@ func main() {
 		}
 		sendJSON(w, http.StatusOK, map[string]string{
 			"installed_version": buildVersion,
-			"availability": "not_checked",
-			"update_method": "verified_local_bundle",
-			"message": "Automatic release discovery and dashboard application are not enabled yet. Apply a downloaded, checksummed LOCAS OS upgrade package with Upgrade-LocasOS.ps1.",
+			"availability":      "not_checked",
+			"update_method":     "verified_local_bundle",
+			"message":           "Automatic release discovery and dashboard application are not enabled yet. Apply a downloaded, checksummed LOCAS OS upgrade package with Upgrade-LocasOS.ps1.",
 		})
 	})
 	mux.HandleFunc("GET /api/session", func(w http.ResponseWriter, r *http.Request) {
