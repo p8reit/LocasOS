@@ -1,0 +1,52 @@
+name: WSL Appliance Build
+on:
+  pull_request:
+    paths:
+      - 'packaging/wsl/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - '.github/workflows/wsl-appliance.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rootfs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Validate scripts and Go
+        run: |
+          bash -n packaging/wsl/firstboot.sh packaging/wsl/build-rootfs.sh
+          go test ./...
+          test -z "$(gofmt -l ./cmd ./internal)"
+      - name: Build image and checksummed rootfs
+        run: bash packaging/wsl/build-rootfs.sh
+      - name: Verify rootfs contents
+        run: |
+          cd dist
+          sha256sum -c locasos-wsl-amd64.tar.sha256
+          tar tf locasos-wsl-amd64.tar > tar-contents.txt
+          grep -q 'opt/locas/bin/locas-core' tar-contents.txt
+          grep -q 'etc/wsl.conf' tar-contents.txt
+      - name: Bundle Windows installer with archive
+        run: |
+          cp packaging/wsl/Install-LocasOS.ps1 dist/
+          cp packaging/wsl/Install-TestPackage.ps1 dist/
+          cp packaging/wsl/diagnose.ps1 dist/
+          cp packaging/wsl/README.md dist/TESTING.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: locasos-wsl-dev-rootfs
+          path: |
+            dist/locasos-wsl-amd64.tar
+            dist/locasos-wsl-amd64.tar.sha256
+            dist/Install-LocasOS.ps1
+            dist/Install-TestPackage.ps1
+            dist/diagnose.ps1
+            dist/TESTING.md
+          retention-days: 7

@@ -1,0 +1,10 @@
+[Unit]
+Description=LOCAS OS idempotent first boot provisioning
+Before=locas-agent.service locas-core.service
+After=local-fs.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/locas-firstboot
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
