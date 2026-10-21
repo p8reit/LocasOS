@@ -26,8 +26,26 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Se
 Start-ScheduledTask -TaskName $taskName
 $found = $false
 for ($i=0; $i -lt 15; $i++) {
-    $matches = @(& wsl.exe -d LocasOS -u root -- pgrep -f '^/usr/bin/sleep infinity$' 2>$null)
-    if ($LASTEXITCODE -eq 0 -and $matches.Count -gt 0) { $found = $true; break }
+    # WSL can emit a non-fatal systemd root-session warning on stderr.
+    # PowerShell 5.1 may promote native stderr into a terminating error.
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = 'wsl.exe'
+    $psi.Arguments = '-d LocasOS -u root -- pgrep -f "^/usr/bin/sleep infinity$"'
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $probe = [System.Diagnostics.Process]::Start($psi)
+    try {
+        $output = $probe.StandardOutput.ReadToEnd()
+        $warningText = $probe.StandardError.ReadToEnd()
+        $probe.WaitForExit()
+        if ($probe.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($output)) {
+            $found = $true
+            break
+        }
+    } finally {
+        $probe.Dispose()
+    }
     Start-Sleep -Seconds 1
 }
 if (-not $found) {
