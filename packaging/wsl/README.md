@@ -51,3 +51,23 @@ These commands do **not** unregister or delete a separate `Ubuntu` distribution.
 ## Windows HTTP validation
 
 After importing, run `.\\Test-LocasOS.ps1` from the extracted artifact folder. The test checks systemd services and the JSON health response on `127.0.0.1:59420`. On standard WSL2, localhost forwarding may be unavailable if the distro exits between tests; open a separate `wsl -d LocasOS -u root -- bash` session and rerun to distinguish lifecycle from networking failures. A warning about the root systemd **user** session has been observed on Windows WSL2, despite successful system-level services; investigate separately.
+
+## Opt-in headless availability at Windows sign-in
+
+The preview WSL distribution may stop after the last WSL session exits, even though systemd services were healthy. **This is an opt-in per-user workaround, not boot-before-login as a Windows service.** After installing LocasOS, use Windows PowerShell in the extracted artifact folder:
+
+```powershell
+.\Enable-LocasOS-Autostart.ps1
+Get-ScheduledTask -TaskName LocasOS-User-Autostart
+.\Test-LocasOS.ps1
+```
+
+This registers a limited-permission task for **the current Windows user**, at **that user's sign-in**, running a long-lived `wsl.exe -d LocasOS -u root -- /usr/bin/sleep infinity`. The root identity is inside the *dedicated Linux test distro* only; the Windows task does not elevate. WSL systemd still manages locas-core and locas-agent. Do not sign out while validating the immediate health check; sign-in persistence needs a separate test. No Windows Task Scheduler task is created automatically by the importer.
+
+To undo the task before uninstalling the distro:
+
+```powershell
+.\Disable-LocasOS-Autostart.ps1
+```
+
+The disable script does not unregister LocasOS or delete its Linux disk. Autostart does not fix the WSL root systemd user-session warning, and has not yet been validated after a full Windows reboot.
