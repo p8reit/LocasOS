@@ -42,8 +42,8 @@ func (m *Manager) status(w http.ResponseWriter, r *http.Request) {
 	_, webuiErr := os.Stat("/var/lib/locas-open-webui/data")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"job": status,
-		"ollama_installed": ollamaErr == nil,
+		"job":                    status,
+		"ollama_installed":       ollamaErr == nil,
 		"workspace_data_present": webuiErr == nil,
 	})
 }
