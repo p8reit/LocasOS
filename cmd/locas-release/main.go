@@ -26,11 +26,11 @@ func main() {
 		fatal(err.Error())
 	}
 	m := updatetrust.Manifest{
-		Version: version,
+		Version:  version,
 		Platform: "linux-amd64-wsl2",
-		File: "locasos-upgrade-amd64.tar",
-		SHA256: hash,
-		Commit: commit,
+		File:     "locasos-upgrade-amd64.tar",
+		SHA256:   hash,
+		Commit:   commit,
 	}
 	if err := m.Validate(); err != nil {
 		fatal(err.Error())
