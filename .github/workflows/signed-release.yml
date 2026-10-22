@@ -39,6 +39,12 @@ jobs:
       - name: Stage identical user-facing upgrade scripts
         run: |
           cp packaging/wsl/Upgrade-LocasOS.ps1 dist/
+          cp packaging/wsl/Install-LocasOS.ps1 dist/
+          cp packaging/wsl/Enable-LocasOS-Autostart.ps1 dist/
+          cp packaging/wsl/Repair-LocasOS-Autostart.ps1 dist/
+          cp packaging/wsl/Keep-LocasOS-Running.ps1 dist/
+          cp packaging/wsl/Test-LocasOS.ps1 dist/
+          cp packaging/wsl/Install-Release-LocasOS.ps1 dist/
           cp packaging/wsl/upgrade-locas.sh dist/
           bash -n dist/upgrade-locas.sh
       - name: Sign exact update archive manifest
@@ -46,6 +52,18 @@ jobs:
           LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64: ${{ secrets.LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64 }}
         run: |
           go run ./cmd/locas-release sign "$GITHUB_REF_NAME" "$GITHUB_SHA" dist
+      - name: Sign fresh-install rootfs and build pinned Windows verifier
+        env:
+          LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64: ${{ secrets.LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64 }}
+        run: |
+          go run ./cmd/locas-release sign-install "$GITHUB_REF_NAME" "$GITHUB_SHA" dist
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.installPublicKeyBase64=$LOCAS_UPDATE_PUBLIC_KEY_B64" -o dist/locasos-verify-install.exe ./cmd/locas-release
+      - name: Independently verify fresh-install signature
+        env:
+          LOCAS_UPDATE_PUBLIC_KEY_B64: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
+        run: |
+          go run ./cmd/locas-release verify-install "$GITHUB_REF_NAME" dist
+          (cd dist && sha256sum -c locasos-wsl-amd64.tar.sha256)
       - name: Independently verify signed release before publishing
         env:
           LOCAS_UPDATE_PUBLIC_KEY_B64: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
