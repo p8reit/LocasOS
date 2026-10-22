@@ -13,11 +13,11 @@ func TestSignedManifestAndTampering(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := Manifest{
-		Version: "v0.10.0",
+		Version:  "v0.10.0",
 		Platform: "linux-amd64-wsl2",
-		File: "locasos-upgrade-amd64.tar",
-		SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		Commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		File:     "locasos-upgrade-amd64.tar",
+		SHA256:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Commit:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
 	data, err := json.Marshal(m)
 	if err != nil {
@@ -35,11 +35,11 @@ func TestSignedManifestAndTampering(t *testing.T) {
 
 func TestRejectPrereleaseSuffixForPromotableBuilds(t *testing.T) {
 	m := Manifest{
-		Version: "v0.10.0-beta.1",
+		Version:  "v0.10.0-beta.1",
 		Platform: "linux-amd64-wsl2",
-		File: "locasos-upgrade-amd64.tar",
-		SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		Commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		File:     "locasos-upgrade-amd64.tar",
+		SHA256:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Commit:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
 	if err := m.Validate(); err == nil {
 		t.Fatal("prerelease version accepted as immutable release identity")
