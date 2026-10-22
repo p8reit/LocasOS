@@ -34,3 +34,22 @@ jobs:
         run: |
           test -f project/AGENT_POLICY.md
           test -f docs/adr/0001-platform-foundation.md
+  appliance-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Build and validate upgrade archive
+        run: |
+          bash packaging/wsl/build-rootfs.sh
+          cd dist
+          sha256sum -c locasos-upgrade-amd64.tar.sha256
+          tar tf locasos-upgrade-amd64.tar > upgrade-manifest.txt
+          grep -qx 'opt/locas/bin/locas-core' upgrade-manifest.txt
+          if grep -Eq '^([.]/?)$' upgrade-manifest.txt; then
+            echo 'Unsafe upgrade archive modifies filesystem root' >&2
+            exit 1
+          fi
