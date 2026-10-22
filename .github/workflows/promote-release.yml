@@ -1,0 +1,30 @@
+name: Promote LOCAS Beta to Stable
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing tested release tag (for example v0.10.0)'
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  promote:
+    if: github.repository == 'p8reit/LocasOS'
+    runs-on: ubuntu-24.04
+    environment: locasos-stable-promotion
+    steps:
+      - name: Promote exactly the tested signed release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid version tag' >&2; exit 1; }
+          current="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$VERSION")"
+          echo "$current" | jq -e '.draft == false and .prerelease == true' >/dev/null
+          for required in locasos-upgrade-amd64.tar locasos-update.json locasos-update.sig Upgrade-LocasOS.ps1 upgrade-locas.sh; do
+            echo "$current" | jq -e --arg n "$required" '[.assets[].name] | index($n) != null' >/dev/null
+          done
+          # Changes the release visibility only; binaries, tag and signatures stay untouched.
+          gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --prerelease=false
+          echo "Promoted $VERSION with no rebuild or asset replacement."

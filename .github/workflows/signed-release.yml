@@ -1,0 +1,55 @@
+name: Signed LOCAS OS Release
+on:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: write
+jobs:
+  release:
+    if: github.repository == 'p8reit/LocasOS'
+    runs-on: ubuntu-24.04
+    environment: locasos-releases
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Validate signing is configured
+        env:
+          LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64: ${{ secrets.LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64 }}
+        run: |
+          test -n "$LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64" || { echo 'Signing key missing. Release blocked.' >&2; exit 1; }
+          bash -n packaging/wsl/upgrade-locas.sh
+          go test ./...
+          test -z "$(gofmt -l ./cmd ./internal)"
+      - name: Build update bundle
+        run: bash packaging/wsl/build-rootfs.sh
+      - name: Stage identical user-facing upgrade scripts
+        run: |
+          cp packaging/wsl/Upgrade-LocasOS.ps1 dist/
+          cp packaging/wsl/upgrade-locas.sh dist/
+          bash -n dist/upgrade-locas.sh
+      - name: Sign exact update archive manifest
+        env:
+          LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64: ${{ secrets.LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64 }}
+        run: |
+          go run ./cmd/locas-release sign "$GITHUB_REF_NAME" "$GITHUB_SHA" dist
+      - name: Validate package contents
+        run: |
+          (cd dist && sha256sum -c locasos-upgrade-amd64.tar.sha256)
+          tar -tf dist/locasos-upgrade-amd64.tar > dist/upgrade-members.txt
+          if grep -Eq '^([.]/?)$|(^/|(^|/)\.\.(/|$))' dist/upgrade-members.txt; then exit 1; fi
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # New releases ALWAYS start as prereleases for real-device testing.
+          # Promote the SAME tag/assets to stable using the separate reviewed step.
+          gh release create "$GITHUB_REF_NAME" \
+            dist/locasos-upgrade-amd64.tar \
+            dist/locasos-update.json \
+            dist/locasos-update.sig \
+            dist/Upgrade-LocasOS.ps1 \
+            dist/upgrade-locas.sh \
+            --verify-tag --generate-notes --prerelease
