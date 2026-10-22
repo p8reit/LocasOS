@@ -58,7 +58,7 @@ func main() {
 			return
 		}
 		sendJSON(w, http.StatusOK, map[string]string{
-			"installed_version": buildVersion,
+			"installed_version":   buildVersion,
 			"availability":      "not_checked",
 			"update_method":     "verified_local_bundle",
 			"message":           "Automatic release discovery and dashboard application are not enabled yet. Apply a downloaded, checksummed LOCAS OS upgrade package with Upgrade-LocasOS.ps1.",
@@ -90,12 +90,12 @@ func main() {
 			return
 		}
 		var latest struct {
-			Tag       string `json:"tag_name"`
-			URL       string `json:"html_url"`
-			Published string `json:"published_at"`
-			Draft     bool   `json:"draft"`
-			Prerelease bool  `json:"prerelease"`
-			Assets []struct {
+			Tag        string `json:"tag_name"`
+			URL        string `json:"html_url"`
+			Published  string `json:"published_at"`
+			Draft      bool   `json:"draft"`
+			Prerelease bool   `json:"prerelease"`
+			Assets     []struct {
 				Name string `json:"name"`
 				URL  string `json:"browser_download_url"`
 				Size int64  `json:"size"`
@@ -127,13 +127,13 @@ func main() {
 			files["upgrade-locas.sh"] != ""
 		sendJSON(w, http.StatusOK, map[string]any{
 			"installed_version": buildVersion,
-			"latest_release_tag": latest.Tag,
-			"release_url": latest.URL,
-			"published_at": latest.Published,
-			"availability": "release_found_comparison_unverified",
-			"package_ready": ready,
-			"package_files": files,
-			"message": "Release artifacts are not signed or verified by LOCAS OS. Review their source and use the manual upgrade procedure; in-dashboard privileged installation is disabled.",
+			"latest_release_tag":  latest.Tag,
+			"release_url":        latest.URL,
+			"published_at":       latest.Published,
+			"availability":       "release_found_comparison_unverified",
+			"package_ready":      ready,
+			"package_files":      files,
+			"message":            "Release artifacts are not signed or verified by LOCAS OS. Review their source and use the manual upgrade procedure; in-dashboard privileged installation is disabled.",
 		})
 	})
 	mux.HandleFunc("GET /api/session", func(w http.ResponseWriter, r *http.Request) {
