@@ -84,9 +84,7 @@ jobs:
           cp packaging/wsl/README.md dist/TESTING.md
       - name: Stamp artifact provenance
         run: |
-          printf '{"schema":1,"repository":"%s","commit":"%s","source_ref":"%s","run_id":"%s","run_url":"%s"}\\n' \\
-            "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_REF" "$GITHUB_RUN_ID" \\
-            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > dist/locasos-build-info.json
+          printf '{"schema":1,"repository":"%s","commit":"%s","source_ref":"%s","run_id":"%s","run_url":"%s"}\n' "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_REF" "$GITHUB_RUN_ID" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > dist/locasos-build-info.json
           cat dist/locasos-build-info.json
       - uses: actions/upload-artifact@v4
         with:
