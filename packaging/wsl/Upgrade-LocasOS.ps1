@@ -16,8 +16,14 @@ if (-not $Apply) {
 }
 $confirmation = Read-Host 'Type UPGRADE LOCASOS to stop/restart the core services and apply this bundle'
 if ($confirmation -cne 'UPGRADE LOCASOS') { throw 'Upgrade cancelled' }
-$linuxPath = (& wsl.exe -d LocasOS -u root -- wslpath -a -u $archive).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $linuxPath.StartsWith('/')) { throw "Cannot resolve upgrade archive inside WSL" }
+# Convert local drive paths without passing backslashes through wsl.exe.
+$fullArchive = [IO.Path]::GetFullPath($archive)
+if ($fullArchive -notmatch '^([A-Za-z]):\\(.*)$') { throw "Unsupported archive path: $fullArchive" }
+$drive = $Matches[1].ToLowerInvariant()
+$relative = $Matches[2].Replace('\', '/')
+$linuxPath = "/mnt/$drive/$relative"
+if ($linuxPath.Contains('"') -or $linuxPath.Contains("`n")) { throw 'Invalid upgrade archive path' }
+Write-Host "WSL archive path: $linuxPath"
 # Redirect LF-normalized script to stdin (avoids Windows PowerShell carriage return).
 $content = [IO.File]::ReadAllText($scriptPath).Replace("`r`n", "`n").Replace("`r", "`n")
 $psi = New-Object Diagnostics.ProcessStartInfo
