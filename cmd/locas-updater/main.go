@@ -4,9 +4,7 @@ import (
 	"archive/tar"
 	"context"
 	"crypto/ed25519"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -177,8 +175,9 @@ func validateArchive(filename string)error{
 		if name=="." || name=="" || strings.HasPrefix(name,"/") || clean!=name || strings.HasPrefix(name,"../"){
 			return errors.New("unsafe path in update archive")
 		}
-		if !(name=="opt"||name=="etc"||name=="usr"||strings.HasPrefix(name,"opt/locas/")||
-			strings.HasPrefix(name,"etc/systemd/system/")||strings.HasPrefix(name,"usr/local/sbin/")){
+		if !(name=="opt"||name=="opt/locas"||name=="opt/locas/bin"||strings.HasPrefix(name,"opt/locas/bin/")||
+			name=="etc"||name=="etc/systemd"||name=="etc/systemd/system"||strings.HasPrefix(name,"etc/systemd/system/")||
+			name=="usr"||name=="usr/local"||name=="usr/local/sbin"||strings.HasPrefix(name,"usr/local/sbin/")){
 			return fmt.Errorf("unauthorized update path %s",name)
 		}
 		if h.Typeflag!=tar.TypeReg && h.Typeflag!=tar.TypeRegA && h.Typeflag!=tar.TypeDir {
