@@ -25,20 +25,54 @@ grep -Eq '^(\\./)?opt/locas/bin/locas-core$' "$members" || {
 if grep -Eq '(^/|(^|/)\\.\\.(/|$))' "$members"; then
   echo "Unsafe archive traversal detected" >&2; exit 1
 fi
+# Snapshot every pre-existing file the package can replace, not only Core/Agent.
+# Record package additions separately so a failed installation can remove them.
 backup_dir=/var/lib/locas-upgrades
 install -d -m 0700 -o root -g root "$backup_dir"
-stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 backup="$backup_dir/preupgrade-$stamp.tar"
-tar -C / -cf "$backup" opt/locas/bin etc/systemd/system/locas-core.service etc/systemd/system/locas-agent.service
+existing="$(mktemp)"
+added="$(mktemp)"
+cleanup() { rm -f "$members" "$existing" "$added"; }
+trap cleanup EXIT
+
+while IFS= read -r member; do
+  member="${member#./}"
+  member="${member%/}"
+  [[ -n "$member" ]] || continue
+  # The upgrade package is confined to product-owned files and service units.
+  case "$member" in
+    opt|opt/locas|opt/locas/bin|etc|etc/systemd|etc/systemd/system|usr|usr/local|usr/local/sbin) continue ;;
+    opt/locas/bin/*|etc/systemd/system/locas-*.service|etc/systemd/system/locas-*.path|usr/local/sbin/locas-*) ;;
+    *) echo "Unauthorized archive member: $member" >&2; exit 1 ;;
+  esac
+  if [[ -L "/$member" ]]; then
+    echo "Refusing to replace symbolic link: $member" >&2; exit 1
+  elif [[ -f "/$member" ]]; then
+    printf '%s\\n' "$member" >> "$existing"
+  elif [[ ! -e "/$member" ]]; then
+    printf '%s\\n' "$member" >> "$added"
+  else
+    echo "Unexpected existing archive destination: $member" >&2; exit 1
+  fi
+done < "$members"
+tar -C / -cf "$backup" -T "$existing"
 chmod 0600 "$backup"
 restore() {
-  echo "Upgrade failed; restoring prior LOCAS binaries and service units" >&2
-  tar --no-overwrite-dir -C / -xf "$backup" || true
-  systemctl daemon-reload || true
-  systemctl restart locas-agent.service locas-core.service || true
+  trap - ERR
+  echo "Upgrade failed; restoring previous LOCAS files and removing additions" >&2
+  local failed=0
+  while IFS= read -r member; do
+    rm -f -- "/$member" || failed=1
+  done < "$added"
+  tar -C / -xf "$backup" || failed=1
+  systemctl daemon-reload || failed=1
+  systemctl restart locas-agent.service locas-core.service || failed=1
+  if [[ "$failed" -ne 0 ]]; then
+    echo "CRITICAL: Rollback incomplete. Preserve backup: $backup" >&2
+  fi
 }
 trap restore ERR
-# Never include or change model, account, Open WebUI or Docker data.
 tar --no-overwrite-dir -C / -xf "$archive"
 chmod 0755 /opt/locas/bin/locas-core /opt/locas/bin/locas-agent
 systemctl daemon-reload
