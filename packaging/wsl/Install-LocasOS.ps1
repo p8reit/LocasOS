@@ -48,6 +48,19 @@ try {
     Write-Warning "LocasOS was imported but Windows keepalive setup failed. Nothing was unregistered."
     throw
 }
+# A registered autostart task is insufficient: its WSL keepalive process must run.
+$keepaliveReady = $false
+for ($attempt = 1; $attempt -le 15; $attempt++) {
+    $task = Get-ScheduledTask -TaskName "LocasOS-User-Autostart" -ErrorAction SilentlyContinue
+    if ($null -ne $task -and $task.State -eq "Running") {
+        $keepaliveReady = $true
+        break
+    }
+    Start-Sleep -Seconds 1
+}
+if (-not $keepaliveReady) {
+    throw "Windows keepalive task is not running. Imported distro was preserved; inspect Get-ScheduledTaskInfo -TaskName LocasOS-User-Autostart."
+}
 Write-Host "Imported $DistributionName. Starting first-boot provisioning..."
 & $wsl.Source -d $DistributionName -u root -- systemctl start locas-firstboot.service
 if ($LASTEXITCODE -ne 0) {
@@ -88,8 +101,15 @@ for ($attempt = 1; $attempt -le 30; $attempt++) {
 }
 if (-not $ready) {
     Write-Warning "Windows cannot reach a verified LOCAS dashboard on $endpoint."
+    Write-Warning "Checking guest listener to distinguish service failure from Windows/WSL localhost forwarding..."
     & $wsl.Source -d $DistributionName -u root -- systemctl --no-pager status locas-agent.service locas-core.service
+    & $wsl.Source -d $DistributionName -u root -- ss -lnt
+    & $wsl.Source -d $DistributionName -u root -- curl --fail --silent --show-error --max-time 4 http://127.0.0.1:59420/healthz
+    Write-Warning "Guest HTTP may be healthy while Windows localhost forwarding is not; check WSL networking and port conflicts. No system-wide networking changes were made."
     throw "Installation incomplete: dashboard readiness verification failed. Distro preserved; run diagnose.ps1."
+}
+if ((Get-ScheduledTask -TaskName "LocasOS-User-Autostart").State -ne "Running") {
+    throw "Installation incomplete: Windows WSL keepalive stopped before final validation."
 }
 Write-Host "PASS: LOCAS services and Windows dashboard health verified."
 Write-Host "LOCAS OS installed. Open http://127.0.0.1:59420/ for first-run administrator enrollment."
