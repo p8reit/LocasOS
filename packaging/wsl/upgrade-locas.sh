@@ -15,7 +15,11 @@ checksum="${archive}.sha256"
 members="$(mktemp)"
 trap 'rm -f "$members"' EXIT
 tar -tf "$archive" > "$members"
-if grep -Eq '^([.]/?)grep -qx './opt/locas/bin/locas-core' "$members" || {
+if grep -Eq '^([.]/?)$' "$members"; then
+  echo 'Unsafe archive root entry' >&2
+  exit 1
+fi
+grep -qx './opt/locas/bin/locas-core' "$members" || {
   echo "Unexpected bundle: missing LOCAS core" >&2; exit 1;
 }
 # Upgrade bundles are trusted release inputs. Refuse traversal paths and links.
