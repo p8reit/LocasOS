@@ -69,9 +69,21 @@ func main() {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
+		channel := r.URL.Query().Get("channel")
+		if channel == "" {
+			channel = "stable"
+		}
+		if channel != "stable" && channel != "beta" {
+			http.Error(w, "unsupported update channel", http.StatusBadRequest)
+			return
+		}
+		apiURL := "https://api.github.com/repos/p8reit/LocasOS/releases/latest"
+		if channel == "beta" {
+			apiURL = "https://api.github.com/repos/p8reit/LocasOS/releases?per_page=30"
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
 		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/p8reit/LocasOS/releases/latest", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 		if err != nil {
 			http.Error(w, "update check unavailable", 503)
 			return
@@ -89,7 +101,7 @@ func main() {
 			http.Error(w, fmt.Sprintf("release discovery unavailable (%d)", res.StatusCode), 503)
 			return
 		}
-		var latest struct {
+		type releaseInfo struct {
 			Tag        string `json:"tag_name"`
 			URL        string `json:"html_url"`
 			Published  string `json:"published_at"`
@@ -101,9 +113,32 @@ func main() {
 				Size int64  `json:"size"`
 			} `json:"assets"`
 		}
-		if err := json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&latest); err != nil ||
-			len(latest.Tag) < 1 || len(latest.Tag) > 100 ||
-			!strings.HasPrefix(latest.URL, "https://github.com/p8reit/LocasOS/releases/tag/") {
+		var latest releaseInfo
+		if channel == "stable" {
+			if err := json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&latest); err != nil {
+				http.Error(w, "invalid release metadata", 502)
+				return
+			}
+		} else {
+			var releases []releaseInfo
+			if err := json.NewDecoder(io.LimitReader(res.Body, 256*1024)).Decode(&releases); err != nil {
+				http.Error(w, "invalid release metadata", 502)
+				return
+			}
+			for _, candidate := range releases {
+				if candidate.Prerelease && !candidate.Draft {
+					latest = candidate
+					break
+				}
+			}
+			if latest.Tag == "" {
+				http.Error(w, "no beta releases available", 404)
+				return
+			}
+		}
+		if len(latest.Tag) < 1 || len(latest.Tag) > 100 ||
+			!strings.HasPrefix(latest.URL, "https://github.com/p8reit/LocasOS/releases/tag/") ||
+			latest.Draft || (channel == "stable" && latest.Prerelease) || (channel == "beta" && !latest.Prerelease) {
 			http.Error(w, "invalid release metadata", 502)
 			return
 		}
@@ -112,6 +147,7 @@ func main() {
 		for _, asset := range latest.Assets {
 			switch asset.Name {
 			case "locasos-upgrade-amd64.tar", "locasos-upgrade-amd64.tar.sha256",
+				"locasos-update.json", "locasos-update.sig",
 				"Upgrade-LocasOS.ps1", "upgrade-locas.sh":
 				if asset.Size > 0 && asset.Size <= 512*1024*1024 &&
 					strings.HasPrefix(asset.URL, "https://github.com/p8reit/LocasOS/releases/download/") &&
@@ -120,20 +156,23 @@ func main() {
 				}
 			}
 		}
-		ready := !latest.Draft && !latest.Prerelease &&
+		ready := !latest.Draft &&
 			files["locasos-upgrade-amd64.tar"] != "" &&
 			files["locasos-upgrade-amd64.tar.sha256"] != "" &&
+			files["locasos-update.json"] != "" &&
+			files["locasos-update.sig"] != "" &&
 			files["Upgrade-LocasOS.ps1"] != "" &&
 			files["upgrade-locas.sh"] != ""
 		sendJSON(w, http.StatusOK, map[string]any{
 			"installed_version":  buildVersion,
+			"channel":            channel,
 			"latest_release_tag": latest.Tag,
 			"release_url":        latest.URL,
 			"published_at":       latest.Published,
 			"availability":       "release_found_comparison_unverified",
 			"package_ready":      ready,
 			"package_files":      files,
-			"message":            "Release artifacts are not signed or verified by LOCAS OS. Review their source and use the manual upgrade procedure; in-dashboard privileged installation is disabled.",
+			"message":            "Release assets include a signing manifest but its signature is not yet checked by the dashboard. Review their source and use the manual upgrade procedure; in-dashboard privileged installation is disabled.",
 		})
 	})
 	mux.HandleFunc("GET /api/session", func(w http.ResponseWriter, r *http.Request) {
