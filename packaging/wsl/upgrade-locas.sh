@@ -77,6 +77,7 @@ tar --no-overwrite-dir -C / -xf "$archive"
 chmod 0755 /opt/locas/bin/locas-core /opt/locas/bin/locas-agent
 systemctl daemon-reload
 systemctl enable --now locas-app-worker.path
+systemctl enable --now locas-update-worker.path
 systemctl restart locas-agent.service
 systemctl restart locas-core.service
 ready=false
