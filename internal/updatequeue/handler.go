@@ -14,7 +14,7 @@ var allowedVersion = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
 type Manager struct {
 	Dir string
-	mu sync.Mutex
+	mu  sync.Mutex
 }
 
 type Request struct {
@@ -98,7 +98,7 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"state": "queued",
+		"state":   "queued",
 		"version": req.Version,
 		"channel": req.Channel,
 	})
