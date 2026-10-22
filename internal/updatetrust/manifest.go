@@ -14,7 +14,6 @@ import (
 
 type Manifest struct {
 	Version string `json:"version"`
-	Channel string `json:"channel"`
 	Platform string `json:"platform"`
 	File string `json:"file"`
 	SHA256 string `json:"sha256"`
@@ -28,12 +27,6 @@ func (m Manifest) Validate() error {
 	if !versionPattern.MatchString(m.Version) || !commitPattern.MatchString(m.Commit) {
 		return errors.New("invalid release identity")
 	}
-	if m.Channel != "stable" && m.Channel != "beta" {
-		return errors.New("unsupported release channel")
-	}
-	if (m.Channel == "stable") != (len(m.Version) > 0 && !containsBeta(m.Version)) {
-		return errors.New("version/channel mismatch")
-	}
 	if m.Platform != "linux-amd64-wsl2" || m.File != "locasos-upgrade-amd64.tar" {
 		return errors.New("unsupported package target")
 	}
@@ -43,11 +36,6 @@ func (m Manifest) Validate() error {
 	}
 	return nil
 }
-func containsBeta(s string) bool {
-	for i:=0;i+5<=len(s);i++ { if s[i:i+5]=="-beta" {return true} }
-	return false
-}
-
 func Parse(data []byte) (Manifest, error) {
 	var m Manifest
 	if len(data) > 4096 { return m, errors.New("manifest too large") }
