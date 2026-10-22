@@ -53,3 +53,18 @@ jobs:
             echo 'Unsafe upgrade archive modifies filesystem root' >&2
             exit 1
           fi
+      - name: Stage in-place upgrade test package
+        run: |
+          cp packaging/wsl/Upgrade-LocasOS.ps1 dist/
+          cp packaging/wsl/upgrade-locas.sh dist/
+          cp packaging/wsl/Test-LocasOS.ps1 dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: locasos-verified-upgrade
+          path: |
+            dist/locasos-upgrade-amd64.tar
+            dist/locasos-upgrade-amd64.tar.sha256
+            dist/Upgrade-LocasOS.ps1
+            dist/upgrade-locas.sh
+            dist/Test-LocasOS.ps1
+          retention-days: 7
