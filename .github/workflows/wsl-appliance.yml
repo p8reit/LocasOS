@@ -32,6 +32,66 @@ jobs:
           sha256sum -c locasos-wsl-amd64.tar.sha256
           sha256sum -c locasos-upgrade-amd64.tar.sha256
           tar tf locasos-upgrade-amd64.tar | grep -q 'opt/locas/bin/locas-core'
+          if tar tf locasos-upgrade-amd64.tar | grep -Eq '^([.]/?)
+          tar tf locasos-wsl-amd64.tar > tar-contents.txt
+          grep -q 'opt/locas/bin/locas-core' tar-contents.txt
+          grep -q 'etc/wsl.conf' tar-contents.txt
+      - name: Bundle Windows installer with archive
+        run: |
+          cp packaging/wsl/Install-LocasOS.ps1 dist/
+          cp packaging/wsl/Install-TestPackage.ps1 dist/
+          cp packaging/wsl/diagnose.ps1 dist/
+          cp packaging/wsl/Test-LocasOS.ps1 dist/
+          cp packaging/wsl/Keep-LocasOS-Running.ps1 dist/
+          cp packaging/wsl/Enable-LocasOS-Autostart.ps1 dist/
+          cp packaging/wsl/Repair-LocasOS-Autostart.ps1 dist/
+          cp packaging/wsl/Disable-LocasOS-Autostart.ps1 dist/
+          cp packaging/wsl/Reset-LocasOS-Test.ps1 dist/
+          cp packaging/wsl/Install-Ollama-LocasOS.ps1 dist/
+          cp packaging/wsl/install-ollama.sh dist/
+          cp packaging/wsl/Test-Ollama-LocasOS.ps1 dist/
+          cp packaging/wsl/repair-ollama.sh dist/
+          cp packaging/wsl/Repair-Ollama-LocasOS.ps1 dist/
+          cp packaging/wsl/repair-ollama-runner.sh dist/
+          cp packaging/wsl/Repair-Ollama-Runner-LocasOS.ps1 dist/
+          cp packaging/wsl/install-open-webui.sh dist/
+          cp packaging/wsl/Install-OpenWebUI-LocasOS.ps1 dist/
+          cp packaging/wsl/Upgrade-LocasOS.ps1 dist/
+          cp packaging/wsl/upgrade-locas.sh dist/
+          cp packaging/wsl/Test-OpenWebUI-LocasOS.ps1 dist/
+          cp packaging/wsl/README.md dist/TESTING.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: locasos-wsl-dev-rootfs
+          path: |
+            dist/locasos-wsl-amd64.tar
+            dist/locasos-wsl-amd64.tar.sha256
+            dist/locasos-upgrade-amd64.tar
+            dist/locasos-upgrade-amd64.tar.sha256
+            dist/Upgrade-LocasOS.ps1
+            dist/upgrade-locas.sh
+            dist/Install-LocasOS.ps1
+            dist/Install-TestPackage.ps1
+            dist/diagnose.ps1
+            dist/Test-LocasOS.ps1
+            dist/Keep-LocasOS-Running.ps1
+            dist/Enable-LocasOS-Autostart.ps1
+            dist/Repair-LocasOS-Autostart.ps1
+            dist/Disable-LocasOS-Autostart.ps1
+            dist/Reset-LocasOS-Test.ps1
+            dist/Install-Ollama-LocasOS.ps1
+            dist/install-ollama.sh
+            dist/Test-Ollama-LocasOS.ps1
+            dist/repair-ollama.sh
+            dist/Repair-Ollama-LocasOS.ps1
+            dist/repair-ollama-runner.sh
+            dist/Repair-Ollama-Runner-LocasOS.ps1
+            dist/install-open-webui.sh
+            dist/Install-OpenWebUI-LocasOS.ps1
+            dist/Test-OpenWebUI-LocasOS.ps1
+            dist/TESTING.md
+          retention-days: 7
+; then echo 'Unsafe top-level archive entry' >&2; exit 1; fi
           tar tf locasos-wsl-amd64.tar > tar-contents.txt
           grep -q 'opt/locas/bin/locas-core' tar-contents.txt
           grep -q 'etc/wsl.conf' tar-contents.txt
