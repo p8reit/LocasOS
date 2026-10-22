@@ -23,6 +23,14 @@ jobs:
           bash -n packaging/wsl/upgrade-locas.sh
           go test ./...
           test -z "$(gofmt -l ./cmd ./internal)"
+      - name: Pin publisher verification key in official updater
+        env:
+          LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64: ${{ secrets.LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64 }}
+        run: |
+          # Export only the public half. Developer/CI builds remain untrusted.
+          public_key="$(go run ./cmd/locas-release public-key)"
+          test -n "$public_key"
+          printf 'LOCAS_UPDATE_PUBLIC_KEY_B64=%s\\n' "$public_key" >> "$GITHUB_ENV"
       - name: Build update bundle
         run: bash packaging/wsl/build-rootfs.sh
       - name: Stage identical user-facing upgrade scripts

@@ -1,0 +1,16 @@
+[Unit]
+Description=LOCAS OS verified independent update worker
+After=network-online.target locas-firstboot.service
+Wants=network-online.target
+Requires=locas-firstboot.service
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/locas/bin/locas-updater
+TimeoutStartSec=30min
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/locas/bin /usr/local/sbin /etc/systemd/system /var/lib/locas /var/lib/locas-updates /var/lib/locas-upgrades
+[Install]
+WantedBy=multi-user.target

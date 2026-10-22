@@ -1,0 +1,8 @@
+[Unit]
+Description=Watch administrator-approved LOCAS OS update queue
+After=locas-firstboot.service
+[Path]
+PathExists=/var/lib/locas/update-install.request
+Unit=locas-update-worker.service
+[Install]
+WantedBy=multi-user.target
