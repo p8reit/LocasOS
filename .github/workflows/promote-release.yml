@@ -14,17 +14,31 @@ jobs:
     runs-on: ubuntu-24.04
     environment: locasos-stable-promotion
     steps:
-      - name: Promote exactly the tested signed release assets
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Verify exact signed archive and promote only release visibility
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
+          LOCAS_UPDATE_PUBLIC_KEY_B64: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
         run: |
+          set -Eeuo pipefail
           [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid version tag' >&2; exit 1; }
+          test -n "$LOCAS_UPDATE_PUBLIC_KEY_B64" || { echo 'Pinned publisher public key not configured' >&2; exit 1; }
           current="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$VERSION")"
           echo "$current" | jq -e '.draft == false and .prerelease == true' >/dev/null
           for required in locasos-upgrade-amd64.tar locasos-update.json locasos-update.sig Upgrade-LocasOS.ps1 upgrade-locas.sh; do
-            echo "$current" | jq -e --arg n "$required" '[.assets[].name] | index($n) != null' >/dev/null
+            echo "$current" | jq -e --arg n "$required" '[.assets[].name] | map(select(. == $n)) | length == 1' >/dev/null
           done
-          # Changes the release visibility only; binaries, tag and signatures stay untouched.
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" --dir "$work" \
+            --pattern 'locasos-upgrade-amd64.tar' \
+            --pattern 'locasos-update.json' \
+            --pattern 'locasos-update.sig'
+          go run ./cmd/locas-release verify "$VERSION" "$work"
+          # This edits the existing release only; no rebuild or asset upload occurs.
           gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --prerelease=false
-          echo "Promoted $VERSION with no rebuild or asset replacement."
+          echo "Promoted signed tested $VERSION without re-signing or replacing the archive."
