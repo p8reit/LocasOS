@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,24 @@ import (
 func main() {
 	if len(os.Args) < 2 {
 		fatal("usage: locas-release sign VERSION COMMIT DIST | public-key")
+	}
+	if os.Args[1] == "keygen" && len(os.Args) == 3 {
+		_, private, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			fatal(err.Error())
+		}
+		file, err := os.OpenFile(os.Args[2], os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err != nil {
+			fatal(err.Error())
+		}
+		_, writeErr := fmt.Fprintln(file, base64.StdEncoding.EncodeToString(private))
+		closeErr := file.Close()
+		if writeErr != nil || closeErr != nil {
+			fatal("could not write protected release signing key")
+		}
+		fmt.Println("Release key created. Keep this file private and out of source control.")
+		fmt.Println("Public verification key:", base64.StdEncoding.EncodeToString(private.Public().(ed25519.PublicKey)))
+		return
 	}
 	key, err := base64.StdEncoding.DecodeString(os.Getenv("LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64"))
 	if err != nil || len(key) != ed25519.PrivateKeySize {
