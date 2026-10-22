@@ -15,6 +15,14 @@ if ($Sha256 -notmatch '^[a-fA-F0-9]{64}$') { throw "Expected a SHA-256 digest (6
 $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
 if ($actual -ine $Sha256) { throw "Rootfs checksum mismatch; refusing import." }
 $wsl = Get-Command wsl.exe -ErrorAction Stop
+$autostart = Join-Path $PSScriptRoot "Enable-LocasOS-Autostart.ps1"
+$repairAutostart = Join-Path $PSScriptRoot "Repair-LocasOS-Autostart.ps1"
+$keepalive = Join-Path $PSScriptRoot "Keep-LocasOS-Running.ps1"
+foreach ($required in @($autostart, $repairAutostart, $keepalive)) {
+    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw "Installer package missing required file: $required"
+    }
+}
 $known = @(& $wsl.Source --list --quiet | ForEach-Object { $_.Trim([char]0).Trim() })
 if ($LASTEXITCODE -ne 0) { throw "Could not list WSL distributions" }
 if ($known -contains $DistributionName) { throw "LocasOS is already installed; refusing to overwrite it." }
@@ -29,21 +37,19 @@ try {
 }
 # Keep a dedicated WSL session alive before the readiness probes. systemd services
 # alone do not prevent WSL from suspending a distribution after commands exit.
-$autostart = Join-Path $PSScriptRoot "Enable-LocasOS-Autostart.ps1"
-$keepalive = Join-Path $PSScriptRoot "Keep-LocasOS-Running.ps1"
-if (-not (Test-Path -LiteralPath $autostart -PathType Leaf) -or
-    -not (Test-Path -LiteralPath $keepalive -PathType Leaf)) {
-    throw "Missing required keepalive files in the installer package; imported distro preserved."
-}
 try {
-    & $autostart
+    if (Get-ScheduledTask -TaskName "LocasOS-User-Autostart" -ErrorAction SilentlyContinue) {
+        & $repairAutostart
+    } else {
+        & $autostart
+    }
     if (-not $?) { throw "Windows keepalive setup failed" }
 } catch {
     Write-Warning "LocasOS was imported but Windows keepalive setup failed. Nothing was unregistered."
     throw
 }
 Write-Host "Imported $DistributionName. Starting first-boot provisioning..."
-& $wsl.Source -d $DistributionName -- systemctl start locas-firstboot.service
+& $wsl.Source -d $DistributionName -u root -- systemctl start locas-firstboot.service
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "First boot failed. The imported distro was preserved for diagnostics."
     throw "Run packaging/wsl/diagnose.ps1 to inspect logs. No automatic deletion was performed."
