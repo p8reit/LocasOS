@@ -8,7 +8,7 @@ docker run --rm --entrypoint /bin/bash \
   -v "$PWD/dist:/update-test:ro" locasos-rootfs-build:dev \
   -euxo pipefail -c '
     mkdir -p /tmp/fakebin /var/lib/locas-ollama/models
-    printf "#!/bin/sh\nexit 0\n" > /tmp/fakebin/systemctl
+    printf "#!/bin/sh\nprintf \"%%s\\n\" \"\$*\" >> /tmp/upgrade-systemctl.log\nexit 0\n" > /tmp/fakebin/systemctl
     printf "#!/bin/sh\nexit 1\n" > /tmp/fakebin/curl
     printf "#!/bin/sh\nprintf \"1\\n\"\n" > /tmp/fakebin/seq
     printf "#!/bin/sh\nexit 0\n" > /tmp/fakebin/journalctl
@@ -29,6 +29,9 @@ docker run --rm --entrypoint /bin/bash \
         echo "Upgrade unexpectedly succeeded without healthy services" >&2
         exit 1
     fi
+    # This MUST reach actual extraction and service restart, not fail at backup.
+    grep -q "enable --now locas-update-worker.path" /tmp/upgrade-systemctl.log
+    grep -q "restart locas-core.service" /tmp/upgrade-systemctl.log
     test "$(cat /opt/locas/bin/locas-core)" = "previous-core"
     test "$(cat /opt/locas/bin/locas-agent)" = "previous-agent"
     cmp /tmp/old-worker /etc/systemd/system/locas-update-worker.service

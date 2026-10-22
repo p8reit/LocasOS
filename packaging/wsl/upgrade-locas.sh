@@ -49,9 +49,9 @@ while IFS= read -r member; do
   if [[ -L "/$member" ]]; then
     echo "Refusing to replace symbolic link: $member" >&2; exit 1
   elif [[ -f "/$member" ]]; then
-    printf '%s\\n' "$member" >> "$existing"
+    printf '%s\n' "$member" >> "$existing"
   elif [[ ! -e "/$member" ]]; then
-    printf '%s\\n' "$member" >> "$added"
+    printf '%s\n' "$member" >> "$added"
   else
     echo "Unexpected existing archive destination: $member" >&2; exit 1
   fi
@@ -97,4 +97,4 @@ if [[ "$ready" != true ]]; then
   false
 fi
 trap - ERR
-printf 'In-place upgrade succeeded. Backup: %s\\n' "$backup"
+printf 'In-place upgrade succeeded. Backup: %s\n' "$backup"
