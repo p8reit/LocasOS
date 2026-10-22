@@ -89,7 +89,6 @@ func main() {
 	fmt.Printf("Signed immutable LOCAS update %s\n", version)
 }
 
-
 func verifyBundle(version, dir string, publicKey ed25519.PublicKey) (string, error) {
 	manifest, err := os.ReadFile(filepath.Join(dir, "locasos-update.json"))
 	if err != nil {
