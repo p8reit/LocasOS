@@ -26,6 +26,8 @@ jobs:
           test -z "$(gofmt -l ./cmd ./internal)"
       - name: Build image and checksummed rootfs
         run: bash packaging/wsl/build-rootfs.sh
+      - name: Inject update failure and verify full rollback in isolated rootfs
+        run: bash packaging/wsl/test-upgrade-rollback.sh
       - name: Verify rootfs contents
         run: |
           cd dist
