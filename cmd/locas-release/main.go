@@ -14,7 +14,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatal("usage: locas-release sign VERSION COMMIT DIST | public-key")
+		fatal("usage: locas-release keygen FILE | public-key | sign VERSION COMMIT DIST | verify VERSION DIST")
 	}
 	if os.Args[1] == "keygen" && len(os.Args) == 3 {
 		_, private, err := ed25519.GenerateKey(rand.Reader)
@@ -32,6 +32,40 @@ func main() {
 		}
 		fmt.Println("Release key created. Keep this file private and out of source control.")
 		fmt.Println("Public verification key:", base64.StdEncoding.EncodeToString(private.Public().(ed25519.PublicKey)))
+		return
+	}
+	if os.Args[1] == "verify" && len(os.Args) == 4 {
+		version, dir := os.Args[2], os.Args[3]
+		publicKey, err := base64.StdEncoding.DecodeString(os.Getenv("LOCAS_UPDATE_PUBLIC_KEY_B64"))
+		if err != nil || len(publicKey) != ed25519.PublicKeySize {
+			fatal("pinned publisher verification key required")
+		}
+		manifest, err := os.ReadFile(filepath.Join(dir, "locasos-update.json"))
+		if err != nil {
+			fatal(err.Error())
+		}
+		if len(manifest) > 4096 {
+			fatal("signed manifest too large")
+		}
+		signature, err := os.ReadFile(filepath.Join(dir, "locasos-update.sig"))
+		if err != nil {
+			fatal(err.Error())
+		}
+		validated, err := updatetrust.Verify(manifest, signature, ed25519.PublicKey(publicKey))
+		if err != nil {
+			fatal(err.Error())
+		}
+		if validated.Version != version {
+			fatal("publisher signature valid but release tag mismatches manifest")
+		}
+		hash, err := updatetrust.FileHash(filepath.Join(dir, validated.File))
+		if err != nil {
+			fatal(err.Error())
+		}
+		if hash != validated.SHA256 {
+			fatal("publisher signature valid but archive digest differs")
+		}
+		fmt.Printf("Verified signed LOCAS release %s (%s)\n", version, hash)
 		return
 	}
 	key, err := base64.StdEncoding.DecodeString(os.Getenv("LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64"))
