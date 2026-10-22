@@ -80,6 +80,17 @@ jobs:
           # New releases ALWAYS start as prereleases for real-device testing.
           # Promote the SAME tag/assets to stable using the separate reviewed step.
           gh release create "$GITHUB_REF_NAME" \
+            dist/locasos-wsl-amd64.tar \
+            dist/locasos-wsl-amd64.tar.sha256 \
+            dist/locasos-install.json \
+            dist/locasos-install.sig \
+            dist/locasos-verify-install.exe \
+            dist/Install-Release-LocasOS.ps1 \
+            dist/Install-LocasOS.ps1 \
+            dist/Enable-LocasOS-Autostart.ps1 \
+            dist/Repair-LocasOS-Autostart.ps1 \
+            dist/Keep-LocasOS-Running.ps1 \
+            dist/Test-LocasOS.ps1 \
             dist/locasos-upgrade-amd64.tar \
             dist/locasos-upgrade-amd64.tar.sha256 \
             dist/locasos-update.json \
