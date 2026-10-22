@@ -16,6 +16,7 @@ import (
 	"github.com/p8reit/LocasOS/internal/admin"
 	"github.com/p8reit/LocasOS/internal/agentclient"
 	"github.com/p8reit/LocasOS/internal/server"
+	"github.com/p8reit/LocasOS/internal/updatetrust"
 )
 
 //go:embed index.html
@@ -77,10 +78,7 @@ func main() {
 			http.Error(w, "unsupported update channel", http.StatusBadRequest)
 			return
 		}
-		apiURL := "https://api.github.com/repos/p8reit/LocasOS/releases/latest"
-		if channel == "beta" {
-			apiURL = "https://api.github.com/repos/p8reit/LocasOS/releases?per_page=30"
-		}
+		apiURL := "https://api.github.com/repos/p8reit/LocasOS/releases?per_page=100"
 		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
@@ -113,32 +111,30 @@ func main() {
 				Size int64  `json:"size"`
 			} `json:"assets"`
 		}
+		var releases []releaseInfo
+		if err := json.NewDecoder(io.LimitReader(res.Body, 1024*1024)).Decode(&releases); err != nil {
+			http.Error(w, "invalid release metadata", 502)
+			return
+		}
+		candidates := make([]updatetrust.ReleaseCandidate, 0, len(releases))
+		for _, release := range releases {
+			candidates = append(candidates, updatetrust.ReleaseCandidate{Tag: release.Tag, Draft: release.Draft, Prerelease: release.Prerelease})
+		}
+		selected, found := updatetrust.SelectLatest(candidates, channel)
+		if !found {
+			http.Error(w, "no releases available in selected channel", 404)
+			return
+		}
 		var latest releaseInfo
-		if channel == "stable" {
-			if err := json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&latest); err != nil {
-				http.Error(w, "invalid release metadata", 502)
-				return
-			}
-		} else {
-			var releases []releaseInfo
-			if err := json.NewDecoder(io.LimitReader(res.Body, 256*1024)).Decode(&releases); err != nil {
-				http.Error(w, "invalid release metadata", 502)
-				return
-			}
-			for _, candidate := range releases {
-				if candidate.Prerelease && !candidate.Draft {
-					latest = candidate
-					break
-				}
-			}
-			if latest.Tag == "" {
-				http.Error(w, "no beta releases available", 404)
-				return
+		for _, release := range releases {
+			if release.Tag == selected.Tag {
+				latest = release
+				break
 			}
 		}
 		if len(latest.Tag) < 1 || len(latest.Tag) > 100 ||
 			!strings.HasPrefix(latest.URL, "https://github.com/p8reit/LocasOS/releases/tag/") ||
-			latest.Draft || (channel == "stable" && latest.Prerelease) || (channel == "beta" && !latest.Prerelease) {
+			latest.Draft || (channel == "stable" && latest.Prerelease) {
 			http.Error(w, "invalid release metadata", 502)
 			return
 		}
