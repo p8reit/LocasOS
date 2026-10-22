@@ -6,6 +6,7 @@ export CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 version="$(git rev-parse --short=12 HEAD 2>/dev/null || printf unknown)"
 go build -trimpath -ldflags="-s -w -X main.buildVersion=${version}" -o build/locas-core ./cmd/locas-core
 go build -trimpath -ldflags="-s -w" -o build/locas-agent ./cmd/locas-agent
+go build -trimpath -ldflags="-s -w -X main.trustedPublicKeyBase64=${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" -o build/locas-updater ./cmd/locas-updater
 tag="locasos-rootfs-build:dev"
 docker build -f packaging/wsl/rootfs.Dockerfile -t "$tag" .
 container="$(docker create "$tag")"
@@ -19,7 +20,7 @@ echo "Built dist/locasos-wsl-amd64.tar"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 mkdir -p "$stage/opt/locas/bin" "$stage/etc/systemd/system" "$stage/usr/local/sbin"
-cp build/locas-core build/locas-agent "$stage/opt/locas/bin/"
+cp build/locas-core build/locas-agent build/locas-updater "$stage/opt/locas/bin/"
 cp packaging/wsl/locas-core.service packaging/wsl/locas-agent.service \
    packaging/wsl/locas-app-worker.path packaging/wsl/locas-app-worker.service \
    "$stage/etc/systemd/system/"
@@ -27,6 +28,8 @@ cp packaging/wsl/locas-app-worker.sh "$stage/usr/local/sbin/locas-app-worker"
 cp packaging/wsl/install-ollama.sh "$stage/usr/local/sbin/locas-install-ollama"
 cp packaging/wsl/install-open-webui.sh "$stage/usr/local/sbin/locas-install-open-webui"
 cp packaging/wsl/repair-ollama.sh "$stage/usr/local/sbin/locas-repair-ollama"
+cp packaging/wsl/upgrade-locas.sh "$stage/usr/local/sbin/locas-upgrade"
+cp packaging/wsl/locas-update-worker.service packaging/wsl/locas-update-worker.path "$stage/etc/systemd/system/"
 chmod 0755 "$stage/opt/locas/bin/"* "$stage/usr/local/sbin/"*
 tar -C "$stage" -cf dist/locasos-upgrade-amd64.tar opt etc usr
 (cd dist && sha256sum locasos-upgrade-amd64.tar > locasos-upgrade-amd64.tar.sha256)
