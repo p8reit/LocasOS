@@ -132,7 +132,7 @@ func run() error {
 	if err := json.Unmarshal(metadata, &rel); err != nil {
 		return fail(err)
 	}
-	if rel.Tag != req.Version || rel.Draft || rel.Prerelease != (req.Channel == "beta") {
+	if !releaseAllowed(rel, req) {
 		return fail(errors.New("release channel or identity does not match approval"))
 	}
 	known := map[string]asset{}
@@ -212,6 +212,13 @@ func run() error {
 	}
 	setStatus(status{State: "installed", Version: req.Version, Channel: req.Channel, Message: "Health-checked upgrade completed"})
 	return nil
+}
+
+// Stable permits only published non-prereleases. Early Access permits both
+// prereleases and those same builds after promotion to Stable.
+func releaseAllowed(rel release, req request) bool {
+	return rel.Tag == req.Version && !rel.Draft &&
+		(req.Channel == "beta" || (req.Channel == "stable" && !rel.Prerelease))
 }
 
 func fetch(ctx context.Context, client *http.Client, url string, max int64) ([]byte, error) {
