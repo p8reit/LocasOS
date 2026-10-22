@@ -2,13 +2,13 @@ package main
 
 import (
 	"crypto/ed25519"
- "crypto/sha256"
- "encoding/hex"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
- "io"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -18,20 +18,27 @@ import (
 var installPublicKeyBase64 string
 
 type installManifest struct {
- Version string `json:"version"`
- Commit string `json:"commit"`
- Platform string `json:"platform"`
- File string `json:"file"`
- SHA256 string `json:"sha256"`
+	Version  string `json:"version"`
+	Commit   string `json:"commit"`
+	Platform string `json:"platform"`
+	File     string `json:"file"`
+	SHA256   string `json:"sha256"`
 }
 
 func main() {
- if len(os.Args)==4 && os.Args[1]=="verify-install" {
-   if err:=verifyInstall(os.Args[2],os.Args[3]);err!=nil {fatal(err.Error())};fmt.Println("PASS: signed install image and checksum verified");return
- }
- if len(os.Args)==5 && os.Args[1]=="sign-install" {
-   if err:=signInstall(os.Args[2],os.Args[3],os.Args[4]);err!=nil {fatal(err.Error())};return
- }
+	if len(os.Args) == 4 && os.Args[1] == "verify-install" {
+		if err := verifyInstall(os.Args[2], os.Args[3]); err != nil {
+			fatal(err.Error())
+		}
+		fmt.Println("PASS: signed install image and checksum verified")
+		return
+	}
+	if len(os.Args) == 5 && os.Args[1] == "sign-install" {
+		if err := signInstall(os.Args[2], os.Args[3], os.Args[4]); err != nil {
+			fatal(err.Error())
+		}
+		return
+	}
 	if len(os.Args) < 2 {
 		fatal("usage: locas-release keygen FILE | public-key | sign VERSION COMMIT DIST | verify VERSION DIST")
 	}
@@ -142,33 +149,76 @@ func fatal(msg string) {
 	os.Exit(1)
 }
 
-func installHash(file string)(string,error){
- f,err:=os.Open(file);if err!=nil{return "",err};defer f.Close()
- h:=sha256.New();if _,err=io.Copy(h,f);err!=nil{return "",err}
- return hex.EncodeToString(h.Sum(nil)),nil
+func installHash(file string) (string, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err = io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
-func signInstall(version,commit,dir string) error {
- private,err:=base64.StdEncoding.DecodeString(os.Getenv("LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64"))
- if err!=nil||len(private)!=ed25519.PrivateKeySize{return fmt.Errorf("publisher signing key missing")}
- hash,err:=installHash(filepath.Join(dir,"locasos-wsl-amd64.tar"));if err!=nil{return err}
- m:=installManifest{version,commit,"linux-amd64-wsl2","locasos-wsl-amd64.tar",hash}
- payload,err:=json.Marshal(m);if err!=nil{return err};payload=append(payload,'\n')
- if err:=os.WriteFile(filepath.Join(dir,"locasos-install.json"),payload,0644);err!=nil{return err}
- return os.WriteFile(filepath.Join(dir,"locasos-install.sig"),ed25519.Sign(ed25519.PrivateKey(private),payload),0644)
+
+func signInstall(version, commit, dir string) error {
+	private, err := base64.StdEncoding.DecodeString(os.Getenv("LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64"))
+	if err != nil || len(private) != ed25519.PrivateKeySize {
+		return fmt.Errorf("publisher signing key missing")
+	}
+	hash, err := installHash(filepath.Join(dir, "locasos-wsl-amd64.tar"))
+	if err != nil {
+		return err
+	}
+	m := installManifest{version, commit, "linux-amd64-wsl2", "locasos-wsl-amd64.tar", hash}
+	payload, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	payload = append(payload, '\n')
+	if err := os.WriteFile(filepath.Join(dir, "locasos-install.json"), payload, 0644); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "locasos-install.sig"), ed25519.Sign(ed25519.PrivateKey(private), payload), 0644)
 }
-func verifyInstall(version,dir string) error {
- pinned:=installPublicKeyBase64
- if pinned=="" {pinned=os.Getenv("LOCAS_UPDATE_PUBLIC_KEY_B64")}
- key,err:=base64.StdEncoding.DecodeString(pinned)
- if err!=nil||len(key)!=ed25519.PublicKeySize{return fmt.Errorf("trusted publisher key not configured")}
- data,err:=os.ReadFile(filepath.Join(dir,"locasos-install.json"));if err!=nil{return err}
- if len(data)>4096{return fmt.Errorf("install manifest too large")}
- sig,err:=os.ReadFile(filepath.Join(dir,"locasos-install.sig"));if err!=nil{return err}
- if !ed25519.Verify(ed25519.PublicKey(key),data,sig){return fmt.Errorf("install manifest signature invalid")}
- var m installManifest
- if err:=json.Unmarshal(data,&m);err!=nil{return err}
- if m.Version!=version || m.Platform!="linux-amd64-wsl2" || m.File!="locasos-wsl-amd64.tar" || len(m.Commit)!=40 || len(m.SHA256)!=64 {return fmt.Errorf("invalid install image identity")}
- hash,err:=installHash(filepath.Join(dir,m.File));if err!=nil{return err}
- if hash!=m.SHA256{return fmt.Errorf("install image SHA256 mismatch")}
- return nil
+
+func verifyInstall(version, dir string) error {
+	pinned := installPublicKeyBase64
+	if pinned == "" {
+		pinned = os.Getenv("LOCAS_UPDATE_PUBLIC_KEY_B64")
+	}
+	key, err := base64.StdEncoding.DecodeString(pinned)
+	if err != nil || len(key) != ed25519.PublicKeySize {
+		return fmt.Errorf("trusted publisher key not configured")
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "locasos-install.json"))
+	if err != nil {
+		return err
+	}
+	if len(data) > 4096 {
+		return fmt.Errorf("install manifest too large")
+	}
+	sig, err := os.ReadFile(filepath.Join(dir, "locasos-install.sig"))
+	if err != nil {
+		return err
+	}
+	if !ed25519.Verify(ed25519.PublicKey(key), data, sig) {
+		return fmt.Errorf("install manifest signature invalid")
+	}
+	var m installManifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	if m.Version != version || m.Platform != "linux-amd64-wsl2" || m.File != "locasos-wsl-amd64.tar" || len(m.Commit) != 40 || len(m.SHA256) != 64 {
+		return fmt.Errorf("invalid install image identity")
+	}
+	hash, err := installHash(filepath.Join(dir, m.File))
+	if err != nil {
+		return err
+	}
+	if hash != m.SHA256 {
+		return fmt.Errorf("install image SHA256 mismatch")
+	}
+	return nil
 }
