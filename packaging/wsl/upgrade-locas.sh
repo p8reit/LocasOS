@@ -38,7 +38,7 @@ restore() {
 trap restore ERR
 # Retain /var/lib/locas-core, /var/lib/locas-ollama, /var/lib/locas-open-webui,
 # /var/lib/docker, and existing administrator and user data.
-tar -C / -xf "$archive"
+tar --no-overwrite-dir -C / -xf "$archive"
 chmod 0755 /opt/locas/bin/locas-core /opt/locas/bin/locas-agent
 systemctl daemon-reload
 systemctl enable --now locas-app-worker.path
