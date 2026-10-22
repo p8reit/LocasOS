@@ -13,14 +13,14 @@ import (
 )
 
 type Manifest struct {
-	Version string `json:"version"`
+	Version  string `json:"version"`
 	Platform string `json:"platform"`
-	File string `json:"file"`
-	SHA256 string `json:"sha256"`
-	Commit string `json:"commit"`
+	File     string `json:"file"`
+	SHA256   string `json:"sha256"`
+	Commit   string `json:"commit"`
 }
 
-var versionPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$`)
+var versionPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 var commitPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func (m Manifest) Validate() error {
@@ -38,23 +38,36 @@ func (m Manifest) Validate() error {
 }
 func Parse(data []byte) (Manifest, error) {
 	var m Manifest
-	if len(data) > 4096 { return m, errors.New("manifest too large") }
-	if err:=json.Unmarshal(data,&m);err!=nil{return m,err}
-	return m,m.Validate()
+	if len(data) > 4096 {
+		return m, errors.New("manifest too large")
+	}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return m, err
+	}
+	return m, m.Validate()
 }
 
 // Verify authenticates the exact bytes served as the manifest, not a re-encoded JSON object.
-func Verify(manifest,signature []byte,pub ed25519.PublicKey) (Manifest,error) {
-	m,err:=Parse(manifest)
-	if err!=nil{return m,err}
-	if len(pub)!=ed25519.PublicKeySize || len(signature)!=ed25519.SignatureSize || !ed25519.Verify(pub,manifest,signature) {
-		return m,errors.New("invalid publisher signature")
+func Verify(manifest, signature []byte, pub ed25519.PublicKey) (Manifest, error) {
+	m, err := Parse(manifest)
+	if err != nil {
+		return m, err
 	}
-	return m,nil
+	if len(pub) != ed25519.PublicKeySize || len(signature) != ed25519.SignatureSize || !ed25519.Verify(pub, manifest, signature) {
+		return m, errors.New("invalid publisher signature")
+	}
+	return m, nil
 }
-func FileHash(path string) (string,error) {
-	f,err:=os.Open(path);if err!=nil{return "",err};defer f.Close()
-	h:=sha256.New()
-	if _,err:=io.Copy(h,f);err!=nil{return "",err}
-	return fmt.Sprintf("%x",h.Sum(nil)),nil
+
+func FileHash(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
