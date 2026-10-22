@@ -12,14 +12,21 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 5 || os.Args[1] != "sign" {
-		fatal("usage: locas-release sign VERSION COMMIT DIST")
+	if len(os.Args) < 2 {
+		fatal("usage: locas-release sign VERSION COMMIT DIST | public-key")
 	}
-	version, commit, dir := os.Args[2], os.Args[3], os.Args[4]
 	key, err := base64.StdEncoding.DecodeString(os.Getenv("LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64"))
 	if err != nil || len(key) != ed25519.PrivateKeySize {
 		fatal("valid signing secret required; refusing unsigned release")
 	}
+	if os.Args[1] == "public-key" && len(os.Args) == 2 {
+		fmt.Println(base64.StdEncoding.EncodeToString(ed25519.PrivateKey(key).Public().(ed25519.PublicKey)))
+		return
+	}
+	if os.Args[1] != "sign" || len(os.Args) != 5 {
+		fatal("usage: locas-release sign VERSION COMMIT DIST | public-key")
+	}
+	version, commit, dir := os.Args[2], os.Args[3], os.Args[4]
 	archive := filepath.Join(dir, "locasos-upgrade-amd64.tar")
 	hash, err := updatetrust.FileHash(archive)
 	if err != nil {
