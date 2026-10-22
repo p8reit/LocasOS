@@ -4,8 +4,8 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"io"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -78,7 +78,7 @@ func main() {
 		}
 		req.Header.Set("Accept", "application/vnd.github+json")
 		req.Header.Set("User-Agent", "LocasOS-update-check")
-		client := &http.Client{Timeout: 6*time.Second}
+		client := &http.Client{Timeout: 6 * time.Second}
 		res, err := client.Do(req)
 		if err != nil {
 			http.Error(w, "release discovery unavailable", 503)
@@ -101,12 +101,12 @@ func main() {
 			return
 		}
 		sendJSON(w, http.StatusOK, map[string]string{
-			"installed_version":   buildVersion,
+			"installed_version":  buildVersion,
 			"latest_release_tag": latest.Tag,
-			"release_url":       latest.URL,
-			"published_at":      latest.Published,
-			"availability":      "release_found_comparison_unverified",
-			"message":           "Release metadata found. Installed commit cannot safely be ordered against a release tag. Review the release before downloading a verified upgrade bundle.",
+			"release_url":        latest.URL,
+			"published_at":       latest.Published,
+			"availability":       "release_found_comparison_unverified",
+			"message":            "Release metadata found. Installed commit cannot safely be ordered against a release tag. Review the release before downloading a verified upgrade bundle.",
 		})
 	})
 	mux.HandleFunc("GET /api/session", func(w http.ResponseWriter, r *http.Request) {
