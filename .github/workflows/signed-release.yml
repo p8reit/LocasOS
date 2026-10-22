@@ -48,6 +48,7 @@ jobs:
           # Promote the SAME tag/assets to stable using the separate reviewed step.
           gh release create "$GITHUB_REF_NAME" \
             dist/locasos-upgrade-amd64.tar \
+            dist/locasos-upgrade-amd64.tar.sha256 \
             dist/locasos-update.json \
             dist/locasos-update.sig \
             dist/Upgrade-LocasOS.ps1 \
