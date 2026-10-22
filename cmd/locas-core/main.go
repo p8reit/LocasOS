@@ -90,9 +90,16 @@ func main() {
 			return
 		}
 		var latest struct {
-			Tag       string `json:"tag_name"`
-			URL       string `json:"html_url"`
-			Published string `json:"published_at"`
+			Tag        string `json:"tag_name"`
+			URL        string `json:"html_url"`
+			Published  string `json:"published_at"`
+			Draft      bool   `json:"draft"`
+			Prerelease bool   `json:"prerelease"`
+			Assets     []struct {
+				Name string `json:"name"`
+				URL  string `json:"browser_download_url"`
+				Size int64  `json:"size"`
+			} `json:"assets"`
 		}
 		if err := json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&latest); err != nil ||
 			len(latest.Tag) < 1 || len(latest.Tag) > 100 ||
@@ -100,13 +107,33 @@ func main() {
 			http.Error(w, "invalid release metadata", 502)
 			return
 		}
-		sendJSON(w, http.StatusOK, map[string]string{
+		// Never accept caller-controlled URLs. Only expose known files under our fixed release namespace.
+		files := map[string]string{}
+		for _, asset := range latest.Assets {
+			switch asset.Name {
+			case "locasos-upgrade-amd64.tar", "locasos-upgrade-amd64.tar.sha256",
+				"Upgrade-LocasOS.ps1", "upgrade-locas.sh":
+				if asset.Size > 0 && asset.Size <= 512*1024*1024 &&
+					strings.HasPrefix(asset.URL, "https://github.com/p8reit/LocasOS/releases/download/") &&
+					strings.HasSuffix(asset.URL, "/"+asset.Name) {
+					files[asset.Name] = asset.URL
+				}
+			}
+		}
+		ready := !latest.Draft && !latest.Prerelease &&
+			files["locasos-upgrade-amd64.tar"] != "" &&
+			files["locasos-upgrade-amd64.tar.sha256"] != "" &&
+			files["Upgrade-LocasOS.ps1"] != "" &&
+			files["upgrade-locas.sh"] != ""
+		sendJSON(w, http.StatusOK, map[string]any{
 			"installed_version":  buildVersion,
 			"latest_release_tag": latest.Tag,
 			"release_url":        latest.URL,
 			"published_at":       latest.Published,
 			"availability":       "release_found_comparison_unverified",
-			"message":            "Release metadata found. Installed commit cannot safely be ordered against a release tag. Review the release before downloading a verified upgrade bundle.",
+			"package_ready":      ready,
+			"package_files":      files,
+			"message":            "Release artifacts are not signed or verified by LOCAS OS. Review their source and use the manual upgrade procedure; in-dashboard privileged installation is disabled.",
 		})
 	})
 	mux.HandleFunc("GET /api/session", func(w http.ResponseWriter, r *http.Request) {
