@@ -40,30 +40,9 @@ func main() {
 		if err != nil || len(publicKey) != ed25519.PublicKeySize {
 			fatal("pinned publisher verification key required")
 		}
-		manifest, err := os.ReadFile(filepath.Join(dir, "locasos-update.json"))
+		hash, err := verifyBundle(version, dir, ed25519.PublicKey(publicKey))
 		if err != nil {
 			fatal(err.Error())
-		}
-		if len(manifest) > 4096 {
-			fatal("signed manifest too large")
-		}
-		signature, err := os.ReadFile(filepath.Join(dir, "locasos-update.sig"))
-		if err != nil {
-			fatal(err.Error())
-		}
-		validated, err := updatetrust.Verify(manifest, signature, ed25519.PublicKey(publicKey))
-		if err != nil {
-			fatal(err.Error())
-		}
-		if validated.Version != version {
-			fatal("publisher signature valid but release tag mismatches manifest")
-		}
-		hash, err := updatetrust.FileHash(filepath.Join(dir, validated.File))
-		if err != nil {
-			fatal(err.Error())
-		}
-		if hash != validated.SHA256 {
-			fatal("publisher signature valid but archive digest differs")
 		}
 		fmt.Printf("Verified signed LOCAS release %s (%s)\n", version, hash)
 		return
@@ -108,6 +87,36 @@ func main() {
 		fatal(err.Error())
 	}
 	fmt.Printf("Signed immutable LOCAS update %s\n", version)
+}
+
+
+func verifyBundle(version, dir string, publicKey ed25519.PublicKey) (string, error) {
+	manifest, err := os.ReadFile(filepath.Join(dir, "locasos-update.json"))
+	if err != nil {
+		return "", err
+	}
+	if len(manifest) > 4096 {
+		return "", fmt.Errorf("signed manifest too large")
+	}
+	signature, err := os.ReadFile(filepath.Join(dir, "locasos-update.sig"))
+	if err != nil {
+		return "", err
+	}
+	validated, err := updatetrust.Verify(manifest, signature, publicKey)
+	if err != nil {
+		return "", err
+	}
+	if validated.Version != version {
+		return "", fmt.Errorf("publisher signature valid but release tag mismatches manifest")
+	}
+	hash, err := updatetrust.FileHash(filepath.Join(dir, validated.File))
+	if err != nil {
+		return "", err
+	}
+	if hash != validated.SHA256 {
+		return "", fmt.Errorf("publisher signature valid but archive digest differs")
+	}
+	return hash, nil
 }
 
 func fatal(msg string) {
