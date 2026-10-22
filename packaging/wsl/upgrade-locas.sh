@@ -43,8 +43,21 @@ systemctl daemon-reload
 systemctl enable --now locas-app-worker.path
 systemctl restart locas-agent.service
 systemctl restart locas-core.service
-systemctl is-active --quiet locas-agent.service
-systemctl is-active --quiet locas-core.service
-curl --fail --silent --max-time 8 http://127.0.0.1:59420/healthz >/dev/null
+ready=false
+for attempt in $(seq 1 30); do
+  if systemctl is-active --quiet locas-agent.service &&
+     systemctl is-active --quiet locas-core.service &&
+     curl --fail --silent --max-time 2 http://127.0.0.1:59420/healthz >/dev/null; then
+    ready=true
+    break
+  fi
+  sleep 2
+done
+if [[ "$ready" != true ]]; then
+  echo "LOCAS services did not pass readiness checks after 60 seconds" >&2
+  systemctl --no-pager -l status locas-agent.service locas-core.service >&2 || true
+  journalctl -b -u locas-core.service -u locas-agent.service -n 50 --no-pager >&2 || true
+  false
+fi
 trap - ERR
 printf 'In-place upgrade succeeded. Backup: %s\n' "$backup"
