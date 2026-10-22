@@ -48,6 +48,8 @@ jobs:
           Write-Host 'Windows importer parse and readiness contract passed.'
       - name: Build image and checksummed rootfs
         run: bash packaging/wsl/build-rootfs.sh
+      - name: Inject update failure and verify full rollback in isolated rootfs
+        run: bash packaging/wsl/test-upgrade-rollback.sh
       - name: Verify rootfs contents
         run: |
           cd dist
