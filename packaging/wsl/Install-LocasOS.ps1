@@ -27,13 +27,28 @@ try {
     # Do not unregister a distro automatically. A partial import requires explicit operator review.
     throw
 }
+# Keep a dedicated WSL session alive before the readiness probes. systemd services
+# alone do not prevent WSL from suspending a distribution after commands exit.
+$autostart = Join-Path $PSScriptRoot "Enable-LocasOS-Autostart.ps1"
+$keepalive = Join-Path $PSScriptRoot "Keep-LocasOS-Running.ps1"
+if (-not (Test-Path -LiteralPath $autostart -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $keepalive -PathType Leaf)) {
+    throw "Missing required keepalive files in the installer package; imported distro preserved."
+}
+try {
+    & $autostart
+    if (-not $?) { throw "Windows keepalive setup failed" }
+} catch {
+    Write-Warning "LocasOS was imported but Windows keepalive setup failed. Nothing was unregistered."
+    throw
+}
 Write-Host "Imported $DistributionName. Starting first-boot provisioning..."
 & $wsl.Source -d $DistributionName -- systemctl start locas-firstboot.service
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "First boot failed. The imported distro was preserved for diagnostics."
     throw "Run packaging/wsl/diagnose.ps1 to inspect logs. No automatic deletion was performed."
 }
-# systemd service startup is asynchronous in WSL; tolerate first-boot scheduling delays.
+# systemd service startup is asynchronous in WSL; tolerate scheduling delays.
 $healthy = $false
 for ($attempt = 1; $attempt -le 30; $attempt++) {
     & $wsl.Source -d $DistributionName -u root -- systemctl is-active --quiet locas-agent.service locas-core.service 2>$null
@@ -48,4 +63,27 @@ if (-not $healthy) {
     & $wsl.Source -d $DistributionName -u root -- systemctl --no-pager status locas-agent.service locas-core.service
     throw "LOCAS services not healthy after readiness checks; imported distro preserved."
 }
-Write-Host "LOCAS OS imported. Open http://127.0.0.1:59420/ for first-run administrator enrollment; browser launch is manual."
+# Verify availability from the Windows browser's side, not only service state.
+# Also validate the identity of the response so another app cannot pass this probe.
+$endpoint = "http://127.0.0.1:59420/healthz"
+$ready = $false
+for ($attempt = 1; $attempt -le 30; $attempt++) {
+    try {
+        $raw = & curl.exe --silent --show-error --fail --noproxy "*" --max-time 4 $endpoint 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $health = ($raw -join "`n") | ConvertFrom-Json
+            if ($health.component -eq "locas-core" -and $health.status -eq "ok") {
+                $ready = $true
+                break
+            }
+        }
+    } catch { }
+    Start-Sleep -Seconds 2
+}
+if (-not $ready) {
+    Write-Warning "Windows cannot reach a verified LOCAS dashboard on $endpoint."
+    & $wsl.Source -d $DistributionName -u root -- systemctl --no-pager status locas-agent.service locas-core.service
+    throw "Installation incomplete: dashboard readiness verification failed. Distro preserved; run diagnose.ps1."
+}
+Write-Host "PASS: LOCAS services and Windows dashboard health verified."
+Write-Host "LOCAS OS installed. Open http://127.0.0.1:59420/ for first-run administrator enrollment."
