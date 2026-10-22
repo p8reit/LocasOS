@@ -7,7 +7,6 @@ import (
  "fmt"
  "os"
  "path/filepath"
- "strings"
 
  "github.com/p8reit/LocasOS/internal/updatetrust"
 )
@@ -15,21 +14,19 @@ import (
 func main() {
  if len(os.Args)!=5 || os.Args[1]!="sign" {fatal("usage: locas-release sign VERSION COMMIT DIST")}
  version,commit,dir:=os.Args[2],os.Args[3],os.Args[4]
- secret:=strings.TrimSpace(os.Getenv("LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64"))
+ secret:=os.Getenv("LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64")
  key,err:=base64.StdEncoding.DecodeString(secret)
  if err!=nil || len(key)!=ed25519.PrivateKeySize {fatal("valid signing secret required; refusing unsigned release")}
- channel:="stable"
- if strings.Contains(version,"-beta.") {channel="beta"}
- archive:=filepath.Join(dir,"locasos-upgrade-amd64.tar")
+  archive:=filepath.Join(dir,"locasos-upgrade-amd64.tar")
  hash,err:=updatetrust.FileHash(archive)
  if err!=nil{fatal(err.Error())}
- m:=updatetrust.Manifest{Version:version,Channel:channel,Platform:"linux-amd64-wsl2",File:"locasos-upgrade-amd64.tar",SHA256:hash,Commit:commit}
+ m:=updatetrust.Manifest{Version:version,Platform:"linux-amd64-wsl2",File:"locasos-upgrade-amd64.tar",SHA256:hash,Commit:commit}
  if err:=m.Validate();err!=nil{fatal(err.Error())}
  payload,err:=json.Marshal(m);if err!=nil{fatal(err.Error())}
  payload=append(payload,'\n')
  sig:=ed25519.Sign(ed25519.PrivateKey(key),payload)
  if err:=os.WriteFile(filepath.Join(dir,"locasos-update.json"),payload,0644);err!=nil{fatal(err.Error())}
  if err:=os.WriteFile(filepath.Join(dir,"locasos-update.sig"),sig,0644);err!=nil{fatal(err.Error())}
- fmt.Printf("Signed %s %s update manifest\n",channel,version)
+ fmt.Printf("Signed immutable LOCAS update %s\n",version)
 }
 func fatal(msg string){fmt.Fprintln(os.Stderr,msg);os.Exit(1)}
