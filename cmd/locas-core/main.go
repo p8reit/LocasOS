@@ -72,20 +72,26 @@ func main() {
 		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/p8reit/LocasOS/releases/latest", nil)
-		if err != nil { http.Error(w, "update check unavailable", 503); return }
+		if err != nil {
+			http.Error(w, "update check unavailable", 503)
+			return
+		}
 		req.Header.Set("Accept", "application/vnd.github+json")
 		req.Header.Set("User-Agent", "LocasOS-update-check")
 		client := &http.Client{Timeout: 6*time.Second}
 		res, err := client.Do(req)
-		if err != nil { http.Error(w, "release discovery unavailable", 503); return }
+		if err != nil {
+			http.Error(w, "release discovery unavailable", 503)
+			return
+		}
 		defer res.Body.Close()
 		if res.StatusCode != http.StatusOK {
 			http.Error(w, fmt.Sprintf("release discovery unavailable (%d)", res.StatusCode), 503)
 			return
 		}
 		var latest struct {
-			Tag string `json:"tag_name"`
-			URL string `json:"html_url"`
+			Tag       string `json:"tag_name"`
+			URL       string `json:"html_url"`
 			Published string `json:"published_at"`
 		}
 		if err := json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&latest); err != nil ||
@@ -95,12 +101,12 @@ func main() {
 			return
 		}
 		sendJSON(w, http.StatusOK, map[string]string{
-			"installed_version": buildVersion,
+			"installed_version":   buildVersion,
 			"latest_release_tag": latest.Tag,
-			"release_url": latest.URL,
-			"published_at": latest.Published,
-			"availability": "release_found_comparison_unverified",
-			"message": "Release metadata found. Installed commit cannot safely be ordered against a release tag. Review the release before downloading a verified upgrade bundle.",
+			"release_url":       latest.URL,
+			"published_at":      latest.Published,
+			"availability":      "release_found_comparison_unverified",
+			"message":           "Release metadata found. Installed commit cannot safely be ordered against a release tag. Review the release before downloading a verified upgrade bundle.",
 		})
 	})
 	mux.HandleFunc("GET /api/session", func(w http.ResponseWriter, r *http.Request) {
