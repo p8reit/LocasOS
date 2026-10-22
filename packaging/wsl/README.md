@@ -2,6 +2,27 @@
 
 This branch contains a **buildable development rootfs**, a checksum-verified WSL importer and Linux systemd provisioning units. This is **not yet a public release** and not production hardened.
 
+## Verified clean-install package (Windows)
+
+Use the newest **successful `WSL Appliance Build` on `main`**, not an older PR artifact.
+After extracting the `locasos-wsl-dev-rootfs` ZIP, the package must include
+`locasos-build-info.json` containing the exact source commit and workflow run.
+The test installer rejects packages missing that metadata or Windows readiness checks.
+
+From Windows PowerShell in the extracted artifact folder:
+
+```powershell
+.\Install-TestPackage.ps1
+.\Test-LocasOS.ps1
+Get-ScheduledTask -TaskName LocasOS-User-Autostart
+```
+
+A clean install only passes after the WSL keepalive, core/agent services, and
+Windows HTTP `http://127.0.0.1:59420/healthz` are verified. The WSL root
+user-session warning alone does not establish service failure.
+Failed imports are preserved for diagnostics. Do not unregister or reset a
+distribution containing valuable models or application data.
+
 ## Build artifact (Ubuntu Linux runner)
 
 ```bash
@@ -62,7 +83,7 @@ Get-ScheduledTask -TaskName LocasOS-User-Autostart
 .\Test-LocasOS.ps1
 ```
 
-This registers a limited-permission task for **the current Windows user**, at **that user's sign-in**, running a long-lived `wsl.exe -d LocasOS -u root -- /usr/bin/sleep infinity`. The root identity is inside the *dedicated Linux test distro* only; the Windows task does not elevate. WSL systemd still manages locas-core and locas-agent. Do not sign out while validating the immediate health check; sign-in persistence needs a separate test. No Windows Task Scheduler task is created automatically by the importer.
+This registers a limited-permission task for **the current Windows user**, at **that user's sign-in**, running a long-lived `wsl.exe -d LocasOS -u root -- /usr/bin/sleep infinity`. The root identity is inside the *dedicated Linux test distro* only; the Windows task does not elevate. WSL systemd still manages locas-core and locas-agent. Do not sign out while validating the immediate health check; sign-in persistence needs a separate test. The current clean installer registers and verifies this task automatically; the scripts remain available for repair.
 
 To undo the task before uninstalling the distro:
 
