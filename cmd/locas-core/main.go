@@ -64,6 +64,40 @@ func main() {
 			"message":           "Automatic release discovery and dashboard application are not enabled yet. Apply a downloaded, checksummed LOCAS OS upgrade package with Upgrade-LocasOS.ps1.",
 		})
 	})
+	mux.HandleFunc("GET /api/updates/status", func(w http.ResponseWriter, r *http.Request) {
+		if !admins.Authenticated(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		appProxy(w, r, socket, http.MethodGet, "/internal/updates/status", nil)
+	})
+	mux.HandleFunc("POST /api/updates/install", func(w http.ResponseWriter, r *http.Request) {
+		if !admins.Authenticated(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		if !admin.SafeMutation(r) {
+			http.Error(w, "invalid request", http.StatusForbidden)
+			return
+		}
+		var request struct {
+			Version string `json:"version"`
+			Channel string `json:"channel"`
+		}
+		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&request); err != nil {
+			http.Error(w, "invalid update request", http.StatusBadRequest)
+			return
+		}
+		if (request.Channel != "stable" && request.Channel != "beta") ||
+			len(request.Version) < 6 || len(request.Version) > 40 {
+			http.Error(w, "unsupported update selection", http.StatusBadRequest)
+			return
+		}
+		data, _ := json.Marshal(request)
+		appProxy(w, r, socket, http.MethodPost, "/internal/updates/install", data)
+	})
 	mux.HandleFunc("GET /api/updates/check", func(w http.ResponseWriter, r *http.Request) {
 		if !admins.Authenticated(r) {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
