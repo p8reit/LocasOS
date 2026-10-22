@@ -7,8 +7,8 @@ RUN mkdir -p /opt/locas/bin /opt/locas/web /var/lib/locas /run/locas \
     && useradd --system --create-home --shell /usr/sbin/nologin locas-core \
     && useradd --system --create-home --shell /usr/sbin/nologin locas-agent \
     && useradd --system --create-home --shell /usr/sbin/nologin locas-ollama \
-    && mkdir -p /var/lib/locas-updates /var/lib/locas-upgrades \\
-    && chmod 0755 /var/lib/locas-updates && chmod 0700 /var/lib/locas-upgrades \\
+    && mkdir -p /var/lib/locas-updates /var/lib/locas-upgrades \
+    && chmod 0755 /var/lib/locas-updates && chmod 0700 /var/lib/locas-upgrades \
     && chmod 0750 /var/lib/locas
 COPY packaging/wsl/wsl.conf /etc/wsl.conf
 COPY packaging/wsl/locas-core.service /etc/systemd/system/locas-core.service
