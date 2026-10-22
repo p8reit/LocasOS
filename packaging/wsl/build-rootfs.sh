@@ -28,6 +28,6 @@ cp packaging/wsl/install-ollama.sh "$stage/usr/local/sbin/locas-install-ollama"
 cp packaging/wsl/install-open-webui.sh "$stage/usr/local/sbin/locas-install-open-webui"
 cp packaging/wsl/repair-ollama.sh "$stage/usr/local/sbin/locas-repair-ollama"
 chmod 0755 "$stage/opt/locas/bin/"* "$stage/usr/local/sbin/"*
-tar -C "$stage" -cf dist/locasos-upgrade-amd64.tar .
+tar -C "$stage" -cf dist/locasos-upgrade-amd64.tar opt etc usr
 (cd dist && sha256sum locasos-upgrade-amd64.tar > locasos-upgrade-amd64.tar.sha256)
 echo "Built dist/locasos-upgrade-amd64.tar"
