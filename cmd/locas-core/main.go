@@ -58,7 +58,7 @@ func main() {
 			return
 		}
 		sendJSON(w, http.StatusOK, map[string]string{
-			"installed_version":   buildVersion,
+			"installed_version": buildVersion,
 			"availability":      "not_checked",
 			"update_method":     "verified_local_bundle",
 			"message":           "Automatic release discovery and dashboard application are not enabled yet. Apply a downloaded, checksummed LOCAS OS upgrade package with Upgrade-LocasOS.ps1.",
@@ -126,8 +126,8 @@ func main() {
 			files["Upgrade-LocasOS.ps1"] != "" &&
 			files["upgrade-locas.sh"] != ""
 		sendJSON(w, http.StatusOK, map[string]any{
-			"installed_version": buildVersion,
-			"latest_release_tag":  latest.Tag,
+			"installed_version":  buildVersion,
+			"latest_release_tag": latest.Tag,
 			"release_url":        latest.URL,
 			"published_at":       latest.Published,
 			"availability":       "release_found_comparison_unverified",
