@@ -1,12 +1,12 @@
 # LocasOS Deployment Guide
 
-> **Status:** Windows 11 + WSL2 is the supported installation target in this guide. Full signed fresh-install packages are introduced in the **next release after v0.10.1** once [PR #74](https://github.com/p8reit/LocasOS/pull/74) is merged and a new tag is published. **There is no bootable native/bare-metal ISO yet.** Do not treat a WSL rootfs tar as a bootable USB image.
+> **Status:** Windows 11 + WSL2 is the supported installation target in this guide. Signed WSL fresh-install packaging was merged in PR #74. Use only a release whose complete rootfs and installer asset inventory is verified; tags alone do not guarantee installation completeness. **There is no bootable native/bare-metal ISO yet.** Do not treat a WSL rootfs tar as a bootable USB image.
 
 ## 1. Choose a deployment route
 
 | Route | Intended use | State |
 |---|---|---|
-| Signed GitHub Release fresh install | Install into an empty Windows WSL2 environment | New pipeline (requires a release built after PR #74) |
+| Signed GitHub Release fresh install | Install into an empty Windows WSL2 environment | Implemented packaging; requires complete verified release assets |
 | WSL Appliance Build development artifact | Test a source branch in a disposable Windows environment | Development/testing |
 | Signed in-place upgrade | Upgrade an existing provisioned LocasOS without wiping its data | Implemented, tested on TowerDoom |
 | Native x86-64 disk/USB installer | Replace the host OS on physical hardware | **Not implemented — do not attempt** |
@@ -34,7 +34,17 @@ WSL autostart in this design runs **at Windows user sign-in**; it is not a syste
 
 ## 3. Download the complete signed release
 
-Visit [GitHub Releases](https://github.com/p8reit/LocasOS/releases), choose an official **Early Access** release **newer than v0.10.1** that includes the following files, and download them into a dedicated *new* directory (for example `D:\locasos-release-vX.Y.Z`).
+**Recommended WSL entry point:** Obtain `packaging/wsl/Install-LocasOS-WSL.ps1` from the trusted LocasOS repository (review the script before execution). Run it on Windows, never inside a WSL guest. It selects an explicitly requested release or the selected channel, preflights the remote asset inventory, downloads into an empty versioned Windows installation workspace, verifies the signed manifest and rootfs, and only then starts installation. Example:
+
+```powershell
+.\Install-LocasOS-WSL.ps1 -Channel EarlyAccess -Workspace D:\LocasOS\install
+```
+
+For a specific version pass `-Version vX.Y.Z`. Use `-DownloadOnly` to verify a package without registering a WSL distribution. The default workspace is `%LOCALAPPDATA%\LocasOS\install`; release files remain outside the WSL distro. This bootstrap is distributed with new complete releases but can also be obtained from the repository to start a clean installation. The bootstrap requires authenticated GitHub CLI `gh`; it does not change execution policy or bypass publisher verification. A missing asset aborts before any WSL changes. See [WSL Installation](WSL_INSTALLATION.md).
+
+
+
+Visit [GitHub Releases](https://github.com/p8reit/LocasOS/releases), choose an official **Early Access** release with a verified complete asset list that includes the following files, and download them into a dedicated *new* directory (for example `D:\locasos-release-vX.Y.Z`).
 
 **Fresh-install image and verifier:**
 
@@ -44,6 +54,7 @@ Visit [GitHub Releases](https://github.com/p8reit/LocasOS/releases), choose an o
 - `locasos-install.sig`
 - `locasos-verify-install.exe`
 - `Install-Release-LocasOS.ps1`
+- `Install-LocasOS-WSL.ps1`
 
 **Windows installation support scripts:**
 
@@ -53,7 +64,7 @@ Visit [GitHub Releases](https://github.com/p8reit/LocasOS/releases), choose an o
 - `Keep-LocasOS-Running.ps1`
 - `Test-LocasOS.ps1`
 
-Download directly from the verified `p8reit/LocasOS` release page. Do not mix files from separate releases, PR artifacts, or development folders. An existing `v0.10.1` release only contains upgrade files and **cannot** be used with this fresh-install procedure.
+Download directly from the verified `p8reit/LocasOS` release page. Do not mix files from separate releases, PR artifacts, or development folders. Older incomplete releases (including v0.10.1) contain upgrade files only and **cannot** be used with this fresh-install procedure.
 
 ### Trust boundary
 
