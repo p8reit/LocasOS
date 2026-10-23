@@ -22,6 +22,9 @@ import (
 //go:embed index.html
 var landingPage []byte
 
+//go:embed brand-icon.webp
+var brandIcon []byte
+
 // Assigned at build time using -ldflags; development binaries identify their provenance.
 var buildVersion = "dev"
 
@@ -45,12 +48,18 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", server.NewHandler("locas-core"))
+	mux.HandleFunc("GET /brand/icon.webp", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/webp")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, _ = w.Write(brandIcon)
+	})
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
 		_, _ = w.Write(landingPage)
 	})
 	mux.HandleFunc("GET /api/updates", func(w http.ResponseWriter, r *http.Request) {
