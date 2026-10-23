@@ -45,6 +45,7 @@ jobs:
           cp packaging/wsl/Keep-LocasOS-Running.ps1 dist/
           cp packaging/wsl/Test-LocasOS.ps1 dist/
           cp packaging/wsl/Install-Release-LocasOS.ps1 dist/
+          cp packaging/wsl/Install-LocasOS-WSL.ps1 dist/
           cp packaging/wsl/upgrade-locas.sh dist/
           bash -n dist/upgrade-locas.sh
       - name: Sign exact update archive manifest
@@ -73,6 +74,23 @@ jobs:
           (cd dist && sha256sum -c locasos-upgrade-amd64.tar.sha256)
           tar -tf dist/locasos-upgrade-amd64.tar > dist/upgrade-members.txt
           if grep -Eq '^([.]/?)$|(^/|(^|/)\.\.(/|$))' dist/upgrade-members.txt; then exit 1; fi
+      - name: WSL release inventory preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            locasos-wsl-amd64.tar locasos-wsl-amd64.tar.sha256
+            locasos-install.json locasos-install.sig locasos-verify-install.exe
+            Install-Release-LocasOS.ps1 Install-LocasOS-WSL.ps1 Install-LocasOS.ps1
+            Enable-LocasOS-Autostart.ps1 Repair-LocasOS-Autostart.ps1
+            Keep-LocasOS-Running.ps1 Test-LocasOS.ps1
+            locasos-upgrade-amd64.tar locasos-upgrade-amd64.tar.sha256
+            locasos-update.json locasos-update.sig
+            Upgrade-LocasOS.ps1 upgrade-locas.sh
+          )
+          for asset in "${required[@]}"; do
+            test -s "dist/$asset" || { echo "::error::Missing or empty release artifact $asset"; exit 1; }
+          done
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -86,6 +104,7 @@ jobs:
             dist/locasos-install.sig \
             dist/locasos-verify-install.exe \
             dist/Install-Release-LocasOS.ps1 \
+            dist/Install-LocasOS-WSL.ps1 \
             dist/Install-LocasOS.ps1 \
             dist/Enable-LocasOS-Autostart.ps1 \
             dist/Repair-LocasOS-Autostart.ps1 \
@@ -98,3 +117,13 @@ jobs:
             dist/Upgrade-LocasOS.ps1 \
             dist/upgrade-locas.sh \
             --verify-tag --generate-notes --prerelease
+      - name: Verify published WSL release asset inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' > /tmp/published-assets.txt
+          for asset in locasos-wsl-amd64.tar locasos-wsl-amd64.tar.sha256 locasos-install.json locasos-install.sig locasos-verify-install.exe Install-Release-LocasOS.ps1 Install-LocasOS-WSL.ps1 Install-LocasOS.ps1 Enable-LocasOS-Autostart.ps1 Repair-LocasOS-Autostart.ps1 Keep-LocasOS-Running.ps1 Test-LocasOS.ps1; do
+            grep -Fxq "$asset" /tmp/published-assets.txt || { echo "::error::Published release missing $asset"; exit 1; }
+          done
