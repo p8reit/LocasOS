@@ -45,6 +45,9 @@ jobs:
           foreach ($required in @('PASS: LOCAS services and Windows dashboard health verified.', 'http://127.0.0.1:59420/healthz', 'locas-core')) {
             if (-not $installer.Contains($required)) { throw "Missing installer readiness contract: $required" }
           }
+          foreach ($required in @('systemctl start $service', 'locas-agent.service', 'locas-core.service', 'Failed to activate $service after first boot')) {
+            if (-not $installer.Contains($required)) { throw "Missing first-boot activation contract: $required" }
+          }
           Write-Host 'Windows importer parse and readiness contract passed.'
       - name: Build image and checksummed rootfs
         run: bash packaging/wsl/build-rootfs.sh
