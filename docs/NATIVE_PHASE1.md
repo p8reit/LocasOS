@@ -42,7 +42,7 @@ The script refuses WSL, non-Ubuntu-24.04 guests, non-systemd environments, missi
 2. Disposable x86-64 UEFI VM boots a clean Ubuntu Server 24.04 installation.
 3. Native payload provisions firstboot, agent, core, path workers, and responds with `{"component":"locas-core","status":"ok"}` within the guest.
 4. Reboot maintains service health and protects administrator enrollment.
-5. A negative test proves WSL and non-VM environments reject installation.
+5. A negative test proves WSL and physical hosts and non-VM environments reject installation.
 6. Later work: reproducible **bootable ISO** using official Ubuntu installer with independent, authenticated base-image verification; safe human-confirmed disk selection; offline install and recovery media; GPU/CUDA hardware qualification; signed native release, A/B system rollback, power-loss tests.
 
 **Hard stop:** No unattended destructive partitioning, no physical-disk support, no production native release, and no unsigned ISO claims until dedicated verification and recovery milestones pass.
