@@ -33,7 +33,7 @@ jobs:
           go-version: '1.23'
       - name: Verify source and archive safety
         run: |
-          bash -n packaging/native/build-payload.sh packaging/native/install-native-vm.sh packaging/native/validate-payload.sh
+          bash -n packaging/native/build-payload.sh packaging/native/install-native-vm.sh packaging/native/validate-payload.sh packaging/native/test-native-vm.sh packaging/native/launch-uefi-vm.sh
           python3 -m unittest discover -s packaging/native -p 'test_*.py' -v
           go test ./...
       - name: Build native VM application payload
@@ -55,5 +55,7 @@ jobs:
             dist/native/locasos-native-payload-amd64.tar.sha256
             packaging/native/install-native-vm.sh
             packaging/native/verify-archive.py
+            packaging/native/test-native-vm.sh
+            packaging/native/launch-uefi-vm.sh
             docs/NATIVE_PHASE1.md
           retention-days: 7
