@@ -7,6 +7,9 @@ on:
       - 'cmd/**'
       - 'internal/**'
       - 'go.mod'
+      - 'README.md'
+      - 'docs/NATIVE_PHASE1.md'
+      - 'docs/NATIVE_INSTALLER_ARCHITECTURE.md'
       - '.github/workflows/native-vm-foundation.yml'
   push:
     branches: [main]
