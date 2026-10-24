@@ -30,8 +30,9 @@ sudo env LOCAS_NATIVE_VM_ACK=I_UNDERSTAND_THIS_IS_A_DISPOSABLE_VM \
   bash ./install-native-vm.sh ./locasos-native-payload-amd64.tar
 systemctl is-active locas-agent.service locas-core.service
 curl -fsS http://127.0.0.1:59420/healthz
+sudo bash ./test-native-vm.sh
 sudo systemctl reboot
-# After reboot repeat the health and service checks.
+# After reboot repeat: sudo bash ./test-native-vm.sh
 ```
 
 The script refuses WSL, non-Ubuntu-24.04 guests, non-systemd environments, missing operator acknowledgment, invalid checksums, and tar archives with unexpected top-level members. The guest must have `curl`, `tar`, and `systemd`. A VM snapshot is required before exercising any prototype installer.
