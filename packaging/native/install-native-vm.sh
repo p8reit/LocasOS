@@ -10,6 +10,10 @@ fi
 if grep -qi microsoft /proc/sys/kernel/osrelease; then
   echo 'Refusing WSL; use the separate WSL installer' >&2; exit 1
 fi
+# Never run this prototype on actual hardware, even when an operator supplies the acknowledgement.
+if ! systemd-detect-virt --vm --quiet; then
+  echo 'Physical host or unrecognized VM detected; physical installation is forbidden' >&2; exit 1
+fi
 if [[ ! -f /etc/os-release ]] || ! grep -q '^ID=ubuntu$' /etc/os-release || ! grep -q '^VERSION_ID="24.04"$' /etc/os-release; then
   echo 'Requires Ubuntu Server 24.04 VM' >&2; exit 1
 fi
@@ -23,14 +27,9 @@ expected="$(awk 'NR == 1 {print $1}' "$checksum")"
 [[ "$expected" =~ ^[a-fA-F0-9]{64}$ ]] || { echo 'Invalid checksum' >&2; exit 1; }
 actual="$(sha256sum "$payload" | awk '{print $1}')"
 [[ "$actual" == "$expected" ]] || { echo 'Payload checksum mismatch' >&2; exit 1; }
-# Fail closed on absolute, traversal, or unexpected top-level members.
-while IFS= read -r member; do
-  case "$member" in
-    /*|../*|*/../*|*/..) echo "Unsafe tar entry: $member" >&2; exit 1 ;;
-    opt/locas/*|usr/local/sbin/locas-*|etc/systemd/system/locas-*) ;;
-    *) echo "Unexpected tar entry: $member" >&2; exit 1 ;;
-  esac
-done < <(tar -tf "$payload")
+# Validate archive types and paths: never unpack symlinks or device nodes as root.
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+python3 "$script_dir/verify-archive.py" "$payload"
 # First prototype only. Real bare-metal installation requires signed image verification
 # BEFORE trusting payload contents and does not use this VM-only script.
 for user in locas-core locas-agent locas-ollama; do
