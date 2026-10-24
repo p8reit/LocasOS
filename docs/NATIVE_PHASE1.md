@@ -21,6 +21,19 @@ bash packaging/native/validate-payload.sh
 
 The updater build deliberately rejects an absent pinned signing key. A matching SHA-256 protects accidental corruption and is **not publisher authentication**. Never treat this prototype tarball as a signed release.
 
+## Create an isolated UEFI VM on an Ubuntu Linux host
+
+Install `qemu-system-x86`, `qemu-utils`, and `ovmf` on a **Linux development host**. Independently verify the Ubuntu Server 24.04 amd64 ISO before use. The launcher creates **only** a new 40 GiB virtual qcow2 disk and disposable OVMF variables in an empty workspace; no host block devices are passed through:
+
+```bash
+bash packaging/native/launch-uefi-vm.sh ~/Downloads/ubuntu-24.04-live-server-amd64.iso ~/locasos-native-vm-test
+# Complete interactive Ubuntu Server installation on the VM's virtual disk.
+# Shut down the guest, then boot its virtual disk without the installer ISO:
+bash packaging/native/launch-uefi-vm.sh --resume ~/locasos-native-vm-test
+```
+
+The ISO may have a point-release suffix; the launcher deliberately accepts only the `ubuntu-24.04*live-server-amd64.iso` naming family. ISO filename matching **does not prove authenticity**; verify its upstream signature/checksum independently. If a real boot attempt fails, preserve the virtual disk and VM logs; never retry against physical drives.
+
 ## Use only in a disposable Ubuntu Server 24.04 VM
 
 Copy both files from `dist/native/` into the VM, along with `install-native-vm.sh`. On the guest:
