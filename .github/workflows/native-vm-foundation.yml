@@ -1,0 +1,59 @@
+name: Native VM Foundation
+on:
+  pull_request:
+    paths:
+      - 'packaging/native/**'
+      - 'packaging/wsl/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - '.github/workflows/native-vm-foundation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packaging/native/**'
+      - 'packaging/wsl/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - '.github/workflows/native-vm-foundation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-payload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LOCAS_UPDATE_PUBLIC_KEY_B64: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Verify source and archive safety
+        run: |
+          bash -n packaging/native/build-payload.sh packaging/native/install-native-vm.sh packaging/native/validate-payload.sh
+          python3 -m unittest discover -s packaging/native -p 'test_*.py' -v
+          go test ./...
+      - name: Build native VM application payload
+        run: bash packaging/native/build-payload.sh
+      - name: Validate payload manifest and archive security
+        run: bash packaging/native/validate-payload.sh
+      - name: Reject no-acknowledgment native installer invocation
+        run: |
+          if sudo bash packaging/native/install-native-vm.sh dist/native/locasos-native-payload-amd64.tar; then
+            echo 'ERROR: native installer ran without disposable-VM acknowledgment' >&2
+            exit 1
+          fi
+      - name: Upload VM-only payload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: locasos-native-vm-prototype
+          path: |
+            dist/native/locasos-native-payload-amd64.tar
+            dist/native/locasos-native-payload-amd64.tar.sha256
+            packaging/native/install-native-vm.sh
+            packaging/native/verify-archive.py
+            docs/NATIVE_PHASE1.md
+          retention-days: 7
