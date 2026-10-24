@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl zstd tzdata systemd systemd-sysv libpam-systemd dbus passwd iproute2 procps \
+    ca-certificates curl zstd tzdata systemd systemd-sysv libpam-systemd dbus dbus-user-session passwd iproute2 procps \
     && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /opt/locas/bin /opt/locas/web /var/lib/locas /run/locas \
     && useradd --system --create-home --shell /usr/sbin/nologin locas-core \
