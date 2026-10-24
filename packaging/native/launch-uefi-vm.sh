@@ -4,17 +4,23 @@
 set -Eeuo pipefail
 umask 077
 usage() {
-  echo 'Usage: launch-uefi-vm.sh /path/to/ubuntu-24.04-live-server-amd64.iso WORKSPACE' >&2
+  echo 'Usage: launch-uefi-vm.sh ISO WORKSPACE | --resume WORKSPACE' >&2
   exit 2
 }
 [[ "$#" -eq 2 ]] || usage
-iso="$(realpath -e -- "$1")"
+resume=false
+iso=
 workspace="$2"
-[[ -f "$iso" ]] || usage
-case "$(basename "$iso")" in
-  ubuntu-24.04*live-server-amd64.iso) ;;
-  *) echo 'Expected explicitly supplied Ubuntu 24.04 amd64 live-server ISO' >&2; exit 1 ;;
-esac
+if [[ "$1" == "--resume" ]]; then
+  resume=true
+else
+  iso="$(realpath -e -- "$1")"
+  [[ -f "$iso" ]] || usage
+  case "$(basename "$iso")" in
+    ubuntu-24.04*live-server-amd64.iso) ;;
+    *) echo 'Expected explicitly supplied Ubuntu 24.04 amd64 live-server ISO' >&2; exit 1 ;;
+  esac
+fi
 for command in qemu-system-x86_64 qemu-img cp; do
   command -v "$command" >/dev/null || { echo "Missing dependency: $command" >&2; exit 1; }
 done
@@ -29,14 +35,22 @@ find_ovmf() {
 code="$(find_ovmf)" || { echo 'Install ovmf; OVMF firmware not found' >&2; exit 1; }
 vars="${code/CODE/VARS}"
 [[ -f "$vars" ]] || { echo "Missing matching OVMF variable template: $vars" >&2; exit 1; }
-if [[ -e "$workspace" ]] && [[ -n "$(find "$workspace" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+if [[ "$resume" == false && -e "$workspace" ]] && [[ -n "$(find "$workspace" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
   echo "Workspace not empty: $workspace. Refusing to modify previous VM." >&2
   exit 1
 fi
-mkdir -p -- "$workspace"
+if [[ "$resume" == false ]]; then
+  mkdir -p -- "$workspace"
+fi
 workspace="$(realpath -e -- "$workspace")"
-cp "$vars" "$workspace/OVMF_VARS.fd"
-qemu-img create -f qcow2 "$workspace/locasos-native-test.qcow2" 40G
+if [[ "$resume" == false ]]; then
+  cp "$vars" "$workspace/OVMF_VARS.fd"
+  qemu-img create -f qcow2 "$workspace/locasos-native-test.qcow2" 40G
+else
+  [[ -f "$workspace/locasos-native-test.qcow2" && -f "$workspace/OVMF_VARS.fd" ]] || {
+    echo 'Existing disposable VM missing from workspace' >&2; exit 1
+  }
+fi
 accel=tcg
 [[ -r /dev/kvm && -w /dev/kvm ]] && accel=kvm
 echo "Starting isolated UEFI VM with $accel; only the disposable virtual disk will be installed."
