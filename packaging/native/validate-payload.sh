@@ -11,4 +11,5 @@ for member in opt/locas/bin/locas-core opt/locas/bin/locas-agent opt/locas/bin/l
   etc/systemd/system/locas-core.service usr/local/sbin/locas-firstboot; do
   tar -tf "$archive" | grep -Fxq "$member" || { echo "Missing $member" >&2; exit 1; }
 done
+python3 "$(dirname "$0")/verify-archive.py" "$archive"
 echo "PASS: native VM payload checksum and mandatory contents"
