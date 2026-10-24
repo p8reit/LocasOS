@@ -53,13 +53,18 @@ else
 fi
 accel=tcg
 [[ -r /dev/kvm && -w /dev/kvm ]] && accel=kvm
-echo "Starting isolated UEFI VM with $accel; only the disposable virtual disk will be installed."
-echo "Select the 40 GiB virtio disk in the Ubuntu installer. No host drive is attached."
+echo "Starting isolated UEFI VM with $accel; no host disks are attached."
+extra=()
+if [[ "$resume" == true ]]; then
+  extra=(-boot order=c)
+else
+  echo 'Select the 40 GiB virtio disk in the Ubuntu installer.'
+  extra=(-drive "media=cdrom,file=$iso,readonly=on" -boot order=d)
+fi
 qemu-system-x86_64 -name LocasOS-Native-Disposable \
   -machine q35,accel="$accel" -m 4096 -smp 4 \
   -drive if=pflash,format=raw,readonly=on,file="$code" \
   -drive if=pflash,format=raw,file="$workspace/OVMF_VARS.fd" \
   -drive file="$workspace/locasos-native-test.qcow2",format=qcow2,if=virtio \
-  -drive media=cdrom,file="$iso",readonly=on \
-  -boot order=d -nic user,model=virtio-net-pci \
+  "${extra[@]}" -nic user,model=virtio-net-pci \
   -display gtk
