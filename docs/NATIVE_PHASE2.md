@@ -73,3 +73,19 @@ There is still no automatic application installation in the ISO or recovery-capa
 GitHub Actions `Native UEFI ISO Boot Smoke` downloads the official Ubuntu 24.04.5 Server AMD64 image, verifies its SHA256SUMS signature against the runner's trusted Ubuntu CD signing key (documented fingerprint `843938DF228D22F7B3742BC0D94AA3F0EFE21092`), checks the ISO hash, signs a disposable native VM payload with an ephemeral **test-only** key, remasters the ISO while replaying Ubuntu's boot metadata, checks EFI El Torito metadata and runs OVMF/QEMU with **no attached writable disk**.
 
 This job can take substantial time and bandwidth because the upstream ISO is multiple gigabytes. The test does not certify installer UI correctness, guest OS boot completion or disk installation: those require a disposable VM with a new qcow2 disk plus guest verification and reboot. It deliberately uploads logs rather than the large unsigned experimental ISO.
+
+## Sign the entire experimental native ISO
+
+After the ISO has been built and its boot catalog independently inspected, a protected publisher can sign the **complete ISO bytes**. This is distinct from the embedded native application payload signature.
+
+```bash
+# Protected release environment; do not expose private key or ship it with the ISO.
+export LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64='<protected publisher private key>'
+go run ./cmd/locas-release sign-native-iso vX.Y.Z <40-character-source-commit> dist/native
+
+# From an independent trusted verifier with pinned public key:
+export LOCAS_UPDATE_PUBLIC_KEY_B64='<independently authenticated publisher public key>'
+go run ./cmd/locas-release verify-native-iso vX.Y.Z dist/native
+```
+
+This produces `locasos-native-iso.json` and `locasos-native-iso.sig`, protecting the entire `locasos-native-uefi-vm-experimental.iso` against byte modifications, incorrect versions and substituted platforms. Those files are external to the ISO and must be distributed with it when publishing a future **native test candidate**. The real publisher key must only be used after a complete UEFI VM install-and-reboot acceptance pass. Passing signature tests is not permission to install on physical storage.
