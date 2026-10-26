@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# LocasOS Debian-based developer live ISO. No disk installer or autoinstall.
+set -Eeuo pipefail
+umask 027
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$repo"
+for tool in lb go sha256sum; do command -v "$tool" >/dev/null || { echo "Missing $tool" >&2; exit 1; }; done
+: "${LOCAS_UPDATE_PUBLIC_KEY_B64:?Publisher public key required for native payload}"
+bash packaging/native/build-payload.sh
+bash packaging/native/validate-payload.sh
+workspace="$(mktemp -d)"
+trap 'rm -rf "$workspace"' EXIT
+mkdir -p "$workspace/config/package-lists" "$workspace/config/includes.chroot/usr/local/share/locasos" "$workspace/config/hooks/live"
+# Source-build payload remains explicitly VM-only and is NOT executed by the live image.
+install -m 0644 dist/native/locasos-native-payload-amd64.tar "$workspace/config/includes.chroot/usr/local/share/locasos/"
+install -m 0644 dist/native/locasos-native-payload-amd64.tar.sha256 "$workspace/config/includes.chroot/usr/local/share/locasos/"
+cat > "$workspace/config/package-lists/locasos.list.chroot" <<'LIST'
+systemd-sysv
+dbus-user-session
+ca-certificates
+curl
+openssh-client
+pciutils
+iproute2
+procps
+python3
+LIST
+# Debian Live defaults to a live session, not automatic host disk installation.
+cat > "$workspace/config/hooks/live/010-locasos-brand.hook.chroot" <<'HOOK'
+#!/bin/sh
+set -eu
+printf 'LocasOS Development Live\n' > /etc/issue
+cat > /etc/locasos-release <<'RELEASE'
+NAME="LocasOS"
+PRETTY_NAME="LocasOS Developer Live (Debian-based)"
+EDITION="native-developer-preview"
+RELEASE
+HOOK
+chmod 0755 "$workspace/config/hooks/live/010-locasos-brand.hook.chroot"
+cd "$workspace"
+lb config --mode debian --distribution trixie --architectures amd64 \
+  --binary-images iso-hybrid --bootloaders grub-efi,syslinux \
+  --debian-installer none --archive-areas "main" \
+  --image-name locasos-native-developer \
+  --iso-application "LocasOS Developer Live" --iso-publisher "LocasOS Community" \
+  --iso-volume "LOCASOS_DEV" --apt-recommends false
+lb build
+mkdir -p "$repo/dist/debian"
+image="$(find . -maxdepth 1 -type f -name '*.iso' -print -quit)"
+[[ -n "$image" ]] || { echo 'Live-build did not produce an ISO' >&2; exit 1; }
+install -m 0644 "$image" "$repo/dist/debian/locasos-native-developer-amd64.iso"
+(cd "$repo/dist/debian" && sha256sum locasos-native-developer-amd64.iso > locasos-native-developer-amd64.iso.sha256)
+echo 'Built Debian-based LocasOS developer live ISO; NOT an OS installer or stable release.'
