@@ -19,6 +19,9 @@ if [[ ! -f /etc/os-release ]] || ! grep -q '^ID=ubuntu$' /etc/os-release || ! gr
 fi
 if [[ ! -d /run/systemd/system ]]; then echo 'systemd PID 1 required' >&2; exit 1; fi
 payload="${1:-}"
+if [[ "${payload##*/}" != 'locasos-native-payload-amd64.tar' ]]; then
+ echo 'Refusing an archive name other than the publisher-signed native payload filename' >&2; exit 1
+fi
 if [[ -z "$payload" || ! -f "$payload" ]]; then echo 'Usage: install-native-vm.sh PAYLOAD.tar' >&2; exit 1; fi
 checksum="${payload}.sha256"
 if [[ ! -f "$checksum" ]]; then echo 'Missing matching .sha256' >&2; exit 1; fi
