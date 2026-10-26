@@ -1,0 +1,112 @@
+name: Native UEFI ISO Boot Smoke
+on:
+  pull_request:
+    paths:
+      - 'packaging/native/**'
+      - '.github/workflows/native-uefi-boot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  uefi-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Prepare UEFI/ISO tools and trusted Ubuntu archive key
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends xorriso qemu-system-x86 ovmf gpgv
+          ring=/usr/share/keyrings/ubuntu-archive-keyring.gpg
+          test -s "$ring"
+          # Canonical/Ubuntu documents this CD Image Automatic Signing Key (2012).
+          gpg --show-keys --with-colons "$ring" | grep -Fxq 'fpr:::::::::843938DF228D22F7B3742BC0D94AA3F0EFE21092:'
+          echo "UBUNTU_TRUST_RING=$ring" >> "$GITHUB_ENV"
+      - name: Obtain and independently authenticate Ubuntu 24.04.5 AMD64 server ISO
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/locas-upstream
+          base=https://releases.ubuntu.com/24.04
+          curl --fail --location --retry 3 --output /tmp/locas-upstream/SHA256SUMS "$base/SHA256SUMS"
+          curl --fail --location --retry 3 --output /tmp/locas-upstream/SHA256SUMS.gpg "$base/SHA256SUMS.gpg"
+          curl --fail --location --retry 3 --retry-delay 4 --output /tmp/locas-upstream/ubuntu-24.04.5-live-server-amd64.iso "$base/ubuntu-24.04.5-live-server-amd64.iso"
+          bash packaging/native/verify-ubuntu-iso.sh \
+            /tmp/locas-upstream/ubuntu-24.04.5-live-server-amd64.iso \
+            /tmp/locas-upstream/SHA256SUMS /tmp/locas-upstream/SHA256SUMS.gpg "$UBUNTU_TRUST_RING"
+      - name: Create signed disposable native VM payload
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tmp="$(mktemp -d)"
+          chmod 700 "$tmp"
+          go run ./cmd/locas-release keygen "$tmp/native-ci.key" > "$tmp/keygen.txt"
+          export LOCAS_UPDATE_PUBLIC_KEY_B64="$(sed -n 's/^Public verification key: //p' "$tmp/keygen.txt")"
+          export LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64="$(cat "$tmp/native-ci.key")"
+          bash packaging/native/build-payload.sh
+          go build -o "$tmp/locas-release" ./cmd/locas-release
+          "$tmp/locas-release" sign-native v0.11.0 "$GITHUB_SHA" dist/native
+          "$tmp/locas-release" verify-native v0.11.0 dist/native
+          echo "LOCAS_NATIVE_VERIFY_BIN=$tmp/locas-release" >> "$GITHUB_ENV"
+          echo "LOCAS_UPDATE_PUBLIC_KEY_B64=$LOCAS_UPDATE_PUBLIC_KEY_B64" >> "$GITHUB_ENV"
+          echo 'LOCAS_NATIVE_VERSION=v0.11.0' >> "$GITHUB_ENV"
+          # Ephemeral CI key is not a publisher release key. Never upload it or treat as stable release.
+          rm -f "$tmp/native-ci.key"
+      - name: Build experimental ISO and verify EFI boot metadata
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash packaging/native/stage-iso.sh \
+            /tmp/locas-upstream/ubuntu-24.04.5-live-server-amd64.iso \
+            /tmp/locas-upstream/SHA256SUMS /tmp/locas-upstream/SHA256SUMS.gpg "$UBUNTU_TRUST_RING" \
+            dist/native/locasos-native-payload-amd64.tar \
+            dist/native/locasos-native-uefi-vm-experimental.iso
+          xorriso -indev dist/native/locasos-native-uefi-vm-experimental.iso \
+            -report_el_torito plain > /tmp/locas-el-torito.txt 2>&1
+          grep -Ei 'EFI|uefi' /tmp/locas-el-torito.txt
+          xorriso -indev dist/native/locasos-native-uefi-vm-experimental.iso \
+            -ls /locasos > /tmp/locas-embedded.txt 2>&1
+          grep -F 'locasos-native.sig' /tmp/locas-embedded.txt
+          grep -F 'locasos-native.json' /tmp/locas-embedded.txt
+      - name: Boot experimental ISO under UEFI firmware
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          code=/usr/share/OVMF/OVMF_CODE_4M.fd
+          vars=/usr/share/OVMF/OVMF_VARS_4M.fd
+          test -f "$code" && test -f "$vars"
+          cp "$vars" /tmp/locas-ovmf-vars.fd
+          # No storage drives attached. This is only an ISO firmware/boot smoke test.
+          timeout --preserve-status 90s qemu-system-x86_64 \
+            -machine q35,accel=tcg -m 3072 -smp 2 \
+            -drive if=pflash,format=raw,readonly=on,file="$code" \
+            -drive if=pflash,format=raw,file=/tmp/locas-ovmf-vars.fd \
+            -drive media=cdrom,format=raw,readonly=on,file=dist/native/locasos-native-uefi-vm-experimental.iso \
+            -boot order=d -net none -display none \
+            -serial file:/tmp/locas-uefi-serial.log \
+            -monitor unix:/tmp/locas-monitor.sock,server=on,wait=off \
+            > /tmp/locas-qemu.log 2>&1 || code=$?
+          if [[ "${code:-124}" != 124 && "${code:-124}" != 143 ]]; then
+            echo "QEMU exited unexpectedly; status ${code:-unknown}" >&2
+            cat /tmp/locas-qemu.log
+            exit 1
+          fi
+          echo 'PASS: OVMF/QEMU ran with experimental ISO and no attached disk for 90s.'
+          # This does NOT certify successful Ubuntu kernel boot or installation.
+      - name: Upload boot diagnostics only (not unsigned ISO)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-native-uefi-boot-diagnostics
+          path: |
+            /tmp/locas-qemu.log
+            /tmp/locas-uefi-serial.log
+            /tmp/locas-el-torito.txt
+            /tmp/locas-embedded.txt
+          if-no-files-found: ignore
+          retention-days: 7
