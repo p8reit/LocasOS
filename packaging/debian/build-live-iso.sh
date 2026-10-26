@@ -36,15 +36,6 @@ PRETTY_NAME="LocasOS Developer Live (Debian-based)"
 EDITION="native-developer-preview"
 RELEASE
 HOOK
-cat > "$workspace/config/hooks/live/015-debian-security.hook.chroot" <<'HOOK'
-#!/bin/sh
-set -eu
-# Legacy Ubuntu-hosted live-build incorrectly emits trixie/updates.
-# Provision the correct Debian 13 security archive within the appliance image.
-printf 'deb http://security.debian.org/debian-security trixie-security main\n' > /etc/apt/sources.list.d/locasos-debian-security.list
-apt-get update
-apt-get -y -o Dpkg::Options::=--force-confdef upgrade
-HOOK
 cat > "$workspace/config/hooks/live/020-locasos-services.hook.chroot" <<'HOOK'
 #!/bin/sh
 set -eu
@@ -62,7 +53,7 @@ chmod 0755 "$workspace/config/hooks/live/"*.hook.chroot
 cd "$workspace"
 lb config --mode debian --distribution trixie --architectures amd64 \
   --binary-images iso-hybrid --linux-flavours amd64 --linux-packages linux-image \
-  --debian-installer none --archive-areas "main" --security false \
+  --debian-installer none --archive-areas "main" \
   --iso-application "LocasOS Developer Live" --iso-publisher "LocasOS Community" \
   --iso-volume "LOCASOS_DEV" --apt-recommends false
 lb build
