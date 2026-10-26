@@ -1,9 +1,5 @@
 name: Native ISO Full Image VM Smoke
 on:
-  pull_request:
-    paths:
-      - 'packaging/native/**'
-      - '.github/workflows/native-iso-full-image.yml'
   workflow_dispatch:
     inputs:
       ubuntu_point_release:
