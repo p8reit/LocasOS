@@ -1,0 +1,110 @@
+name: Native ISO Full Image VM Smoke
+on:
+  workflow_dispatch:
+    inputs:
+      ubuntu_point_release:
+        description: 'Ubuntu 24.04 live-server point release (pinned for this validation)'
+        required: true
+        default: '24.04.5'
+        type: string
+permissions:
+  contents: read
+jobs:
+  full-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      RELEASE: ${{ inputs.ubuntu_point_release || '24.04.5' }}
+      LOCAS_UBUNTU_CD_IMAGE_FINGERPRINT: 843938DF228D22F7B3742BC0D94AA3F0EFE21092
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Install ISO and UEFI tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ubuntu-keyring gpgv xorriso qemu-system-x86 ovmf
+      - name: Obtain authenticated Ubuntu ISO and checksums
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$RELEASE" =~ ^24\.04\.[0-9]+$ ]] || { echo 'Invalid pinned Ubuntu point release' >&2; exit 1; }
+          mkdir -p dist/native-iso
+          cd dist/native-iso
+          base="https://releases.ubuntu.com/24.04"
+          curl -fL --retry 3 --output SHA256SUMS "$base/SHA256SUMS"
+          curl -fL --retry 3 --output SHA256SUMS.gpg "$base/SHA256SUMS.gpg"
+          filename="ubuntu-${RELEASE}-live-server-amd64.iso"
+          # Authenticate the signed manifest before downloading a multi-GB ISO.
+          gpgv --status-fd 1 --keyring /usr/share/keyrings/ubuntu-archive-keyring.gpg SHA256SUMS.gpg SHA256SUMS | tee gpg-status.txt
+          grep -F "VALIDSIG $LOCAS_UBUNTU_CD_IMAGE_FINGERPRINT " gpg-status.txt
+          grep -F "$filename" SHA256SUMS
+          curl -fL --retry 3 --retry-delay 3 --output "$filename" "$base/$filename"
+          bash ../../packaging/native/verify-ubuntu-iso.sh "$filename" SHA256SUMS SHA256SUMS.gpg /usr/share/keyrings/ubuntu-archive-keyring.gpg
+      - name: Generate isolated, disposable native signing fixture
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          keydir="$(mktemp -d)"
+          key="$keydir/private.key"
+          trap 'rm -rf "$keydir"' EXIT
+          go run ./cmd/locas-release keygen "$key" > /tmp/locas-test-key.txt
+          export LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64="$(cat "$key")"
+          export LOCAS_UPDATE_PUBLIC_KEY_B64="$(go run ./cmd/locas-release public-key)"
+          echo "LOCAS_UPDATE_PUBLIC_KEY_B64=$LOCAS_UPDATE_PUBLIC_KEY_B64" >> "$GITHUB_ENV"
+          bash packaging/native/build-payload.sh
+          bash packaging/native/validate-payload.sh
+          go run ./cmd/locas-release sign-native v0.10.6 "$GITHUB_SHA" dist/native
+          go build -o dist/native-iso/locas-native-verify ./cmd/locas-release
+          dist/native-iso/locas-native-verify verify-native v0.10.6 dist/native
+      - name: Remaster signed-payload experimental ISO
+        env:
+          LOCAS_NATIVE_VERSION: v0.10.6
+          LOCAS_NATIVE_VERIFY_BIN: ${{ github.workspace }}/dist/native-iso/locas-native-verify
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash packaging/native/stage-iso.sh \
+            "dist/native-iso/ubuntu-${RELEASE}-live-server-amd64.iso" \
+            dist/native-iso/SHA256SUMS dist/native-iso/SHA256SUMS.gpg \
+            /usr/share/keyrings/ubuntu-archive-keyring.gpg \
+            dist/native/locasos-native-payload-amd64.tar \
+            dist/native-iso/locasos-native-uefi-vm-experimental.iso
+          # Confirm payload files and preserved El Torito boot images exist.
+          xorriso -indev dist/native-iso/locasos-native-uefi-vm-experimental.iso \
+            -ls /locasos
+          xorriso -indev dist/native-iso/locasos-native-uefi-vm-experimental.iso \
+            -report_el_torito plain > dist/native-iso/boot-catalog.txt
+          grep -Eiq 'EFI|UEFI|platform id 0xef' dist/native-iso/boot-catalog.txt
+      - name: Smoke-boot experimental ISO with UEFI firmware
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          firmware=
+          for candidate in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd; do
+            if [[ -f "$candidate" ]]; then firmware="$candidate"; break; fi
+          done
+          [[ -n "$firmware" ]] || { echo 'No OVMF firmware' >&2; exit 1; }
+          # Launch a diskless firmware/installer smoke test. No drives and no guest writable disk.
+          # timeout 30 returns 124 if the VM remains alive; this does NOT certify guest provisioning.
+          set +e
+          timeout 30 qemu-system-x86_64 -machine q35,accel=tcg -m 2048 -smp 2 \
+            -drive if=pflash,format=raw,readonly=on,file="$firmware" \
+            -cdrom dist/native-iso/locasos-native-uefi-vm-experimental.iso \
+            -boot order=d -nographic -serial none -monitor none -no-reboot
+          code=$?
+          set -e
+          [[ "$code" -eq 124 ]] || { echo "QEMU unexpectedly exited ($code)" >&2; exit 1; }
+          echo 'PASS: QEMU UEFI image boot smoke process survived 30 seconds (not full OS install validation)'
+      - name: Publish checksum and provenance diagnostics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-iso-full-image-smoke-report
+          path: |
+            dist/native-iso/boot-catalog.txt
+            dist/native-iso/locasos-native-uefi-vm-experimental.iso.sha256
+            dist/native-iso/gpg-status.txt
+          if-no-files-found: ignore
+          retention-days: 14

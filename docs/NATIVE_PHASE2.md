@@ -31,6 +31,18 @@ This uses xorriso to replay boot metadata from Ubuntu installation media; **actu
 
 Create a disposable QEMU VM using the existing `launch-uefi-vm.sh` after adapting the ISO filename check to recognize this experimental ISO. Alternatively attach this ISO manually to a QEMU VM with *only* a new disposable qcow2 disk. The embedded content is at `/locasos` on the ISO and requires an operator-driven Ubuntu install followed by deployment of the VM payload. No autoinstall seed, unattended partitioning, or disk erase command is embedded.
 
+## Automated full ISO smoke job
+
+The on-demand GitHub Actions workflow `Native ISO Full Image VM Smoke` downloads the official Ubuntu Server 24.04.5 ISO (approximately 3.8 GB) and checks the signed upstream SHA256SUMS against the **pinned** Ubuntu CD-image signing fingerprint `843938DF228D22F7B3742BC0D94AA3F0EFE21092`. It builds a native application payload using an ephemeral test-only signing key, stages it as data in a remastered ISO, inspects EFI boot-catalog entries and smoke launches the image under QEMU/OVMF. The workflow **does not** output or publish a production native ISO.
+
+To run:
+```powershell
+gh workflow run native-iso-full-image.yml -R p8reit/LocasOS -f ubuntu_point_release=24.04.5
+gh run list -R p8reit/LocasOS --workflow native-iso-full-image.yml --limit 3
+```
+
+The QEMU smoke step only verifies the emulator doesn't exit immediately. It does **not** prove a functional guest login, real disk installation or preserved app state. Full installer acceptance still requires the disposable VM path described in Phase 1. Production native releases require the protected publisher key, not the ephemeral CI key.
+
 ## Required gates before next implementation
 
 - CI signs a native application manifest and a verifier checks it with a pinned LocasOS release key before installing the payload.
