@@ -9,7 +9,8 @@ LocasOS is a local-first, headless AI appliance control plane. It is designed to
 | Target | Current status | Entry point |
 | --- | --- | --- |
 | Windows 11 / WSL2 | **Stable signed release, v0.10.6** | [WSL installation guide](docs/WSL_INSTALLATION.md) |
-| Native Ubuntu 24.04 UEFI VM | **Development prototype, not released** | [Native Phase 1](docs/NATIVE_PHASE1.md) |
+| Debian 13 based native live ISO | **Developer image factory implemented; not an installer** | [Debian native distribution](docs/DEBIAN_NATIVE_DISTRIBUTION.md) |
+| Native Ubuntu 24.04 UEFI VM | **Legacy prototype for comparative tests** | [Native Phase 1](docs/NATIVE_PHASE1.md) |
 | Bootable bare-metal x86-64 ISO | **Planned; not supported** | [Native installer design](docs/NATIVE_INSTALLER_ARCHITECTURE.md) |
 
 **Important:** A WSL rootfs tar is not a bootable ISO. The native prototype payload is an unsigned development artifact for disposable VMs, not an appliance installer for a physical PC.
@@ -35,9 +36,9 @@ The local HTTP dashboard is loopback-only by default. Do not publish it directly
 
 ## Native path now under development
 
-The native development track reuses the Go core, agent, and trusted updater while keeping Windows/WSL installation machinery separate. Its first deliverable is a checksummed, **VM-only** application payload installed in an isolated Ubuntu Server 24.04 UEFI guest. Physical disk erase and native USB installation remain disabled until an independently signed installer, recovery, and hardware tests are complete.
+The native development track reuses the Go core, agent, and trusted updater while keeping Windows/WSL installation machinery separate. The new primary native track builds a **Debian 13-derived LocasOS developer live ISO** with LocasOS branding, Core/Agent service units, and a disposable UEFI/QEMU smoke test. The earlier Ubuntu VM prototype remains useful for comparison, but is no longer the target distribution. Physical disk erase and native USB installation remain disabled until an independently signed installer, recovery, and hardware tests are complete.
 
-See [Native Phase 1](docs/NATIVE_PHASE1.md) and [Native Installer Architecture](docs/NATIVE_INSTALLER_ARCHITECTURE.md). Current milestones: [UEFI ISO](https://github.com/p8reit/LocasOS/issues/81), [safe storage and rollback](https://github.com/p8reit/LocasOS/issues/82), [NVIDIA/CUDA](https://github.com/p8reit/LocasOS/issues/83), and [native release controls](https://github.com/p8reit/LocasOS/issues/84).
+See [Debian native distribution](docs/DEBIAN_NATIVE_DISTRIBUTION.md), [Native Phase 1](docs/NATIVE_PHASE1.md), and [Native Installer Architecture](docs/NATIVE_INSTALLER_ARCHITECTURE.md). Current milestones: [UEFI ISO](https://github.com/p8reit/LocasOS/issues/81), [safe storage and rollback](https://github.com/p8reit/LocasOS/issues/82), [NVIDIA/CUDA](https://github.com/p8reit/LocasOS/issues/83), and [native release controls](https://github.com/p8reit/LocasOS/issues/84).
 
 ## Security model
 
@@ -50,4 +51,4 @@ See [Native Phase 1](docs/NATIVE_PHASE1.md) and [Native Installer Architecture](
 
 ## Development
 
-Go source lives under `cmd/` and `internal/`. WSL packaging is in `packaging/wsl/`; native VM experimentation is in `packaging/native/`. Build validation is provided by the CI, WSL Appliance Build, and Native VM Foundation workflows.
+Go source lives under `cmd/` and `internal/`. WSL packaging is in `packaging/wsl/`; native VM experimentation is in `packaging/native/`, and the Debian image factory is in `packaging/debian/`. Build validation is provided by the CI, WSL Appliance Build, and Native VM Foundation workflows.
