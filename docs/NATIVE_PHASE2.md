@@ -39,3 +39,31 @@ Create a disposable QEMU VM using the existing `launch-uefi-vm.sh` after adaptin
 - Disk-selection policy must reject all real hardware and all disks not explicitly selected by the operator. This phase does not introduce disk erasure code.
 - Dedicated recovery and OS update rollback must be validated before broad physical hardware tests.
 - All native releases remain separate from the proven signed WSL v0.10.6 channel.
+
+## Native payload publisher signing (new gate)
+
+The native payload now has its own Ed25519 identity, `linux-amd64-native-vm`. It cannot be substituted with a WSL install image or WSL updater manifest.
+
+A trusted builder signs an independently reviewed native package by running:
+
+```bash
+# Version and commit must be the exact native release identity.
+export LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64='<protected signing key>'
+go run ./cmd/locas-release sign-native v0.11.0 <40-character-commit-sha> dist/native
+```
+
+A native operator must obtain a trusted verifier built from reviewed source or authenticated independently, and an independently pinned publisher public key. **Do not trust a verifier or key bundled by untrusted media.**
+
+```bash
+export LOCAS_UPDATE_PUBLIC_KEY_B64='<trusted base64 publisher public key>'
+export LOCAS_NATIVE_VERIFY_BIN=/trusted/path/locas-release
+export LOCAS_NATIVE_VERSION=v0.11.0
+"$LOCAS_NATIVE_VERIFY_BIN" verify-native "$LOCAS_NATIVE_VERSION" dist/native
+
+# install-native-vm.sh now requires those variables and verifies the signature
+# before it extracts files into the guest root filesystem.
+```
+
+The experimental ISO staging tool also refuses unsigned or improperly signed native payloads; `locasos-native.json` and `locasos-native.sig` are embedded as data alongside the archive. CI uses only an ephemeral test signing key; **it does not publish a native release**.
+
+There is still no automatic application installation in the ISO or recovery-capable disk installer. A staged ISO must be booted and the full VM lifecycle tested before it can be called a validated boot image.
