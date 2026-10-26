@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'packaging/debian/**'
+      - 'packaging/common/**'
       - '.github/workflows/debian-native-iso.yml'
       - 'packaging/native/**'
       - 'cmd/**'
