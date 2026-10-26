@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'packaging/wsl/**'
+      - 'packaging/common/**'
       - 'cmd/**'
       - 'internal/**'
       - 'go.mod'
@@ -49,6 +50,11 @@ jobs:
             if (-not $installer.Contains($required)) { throw "Missing first-boot activation contract: $required" }
           }
           Write-Host 'Windows importer parse and readiness contract passed.'
+      - name: Confirm shared Debian dependency manifest
+        run: |
+          grep -q 'packaging/common/base-packages.txt' packaging/wsl/rootfs.Dockerfile
+          grep -q 'packaging/common/base-packages.txt' packaging/debian/build-live-iso.sh
+          grep -q 'FROM debian:trixie-slim' packaging/wsl/rootfs.Dockerfile
       - name: Build image and checksummed rootfs
         run: bash packaging/wsl/build-rootfs.sh
       - name: Inject update failure and verify full rollback in isolated rootfs
@@ -63,6 +69,9 @@ jobs:
           tar tf locasos-wsl-amd64.tar > tar-contents.txt
           grep -q 'opt/locas/bin/locas-core' tar-contents.txt
           grep -q 'etc/wsl.conf' tar-contents.txt
+          grep -q 'etc/os-release' tar-contents.txt
+          tar -xOf locasos-upgrade-amd64.tar opt/locas/bin/locas-os-base | grep -Fxq 'debian:13'
+          docker run --rm locasos-rootfs-build:dev sh -c '. /etc/os-release; test "$ID" = debian && test "$VERSION_ID" = 13'
       - name: Bundle Windows installer with archive
         run: |
           cp packaging/wsl/Install-LocasOS.ps1 dist/

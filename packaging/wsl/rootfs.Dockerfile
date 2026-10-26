@@ -1,8 +1,10 @@
-FROM ubuntu:24.04
+FROM debian:trixie-slim
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl zstd tzdata systemd systemd-sysv libpam-systemd dbus dbus-user-session passwd iproute2 procps \
-    && rm -rf /var/lib/apt/lists/*
+COPY packaging/common/base-packages.txt /tmp/locas-base-packages.txt
+RUN set -eu; apt-get update; \
+    grep -Ev '^[[:space:]]*(#|$)' /tmp/locas-base-packages.txt | xargs apt-get install -y --no-install-recommends; \
+    apt-get install -y --no-install-recommends zstd; \
+    rm -rf /var/lib/apt/lists/* /tmp/locas-base-packages.txt
 RUN mkdir -p /opt/locas/bin /opt/locas/web /var/lib/locas /run/locas \
     && useradd --system --create-home --shell /usr/sbin/nologin locas-core \
     && useradd --system --create-home --shell /usr/sbin/nologin locas-agent \

@@ -1,0 +1,12 @@
+# Shared Debian 13 base services for LocasOS Native and WSL.
+systemd-sysv
+libpam-systemd
+dbus
+dbus-user-session
+ca-certificates
+curl
+tzdata
+passwd
+iproute2
+procps
+python3

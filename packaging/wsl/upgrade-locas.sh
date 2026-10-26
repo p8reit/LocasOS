@@ -25,6 +25,14 @@ grep -Eq '^(\\./)?opt/locas/bin/locas-core$' "$members" || {
 if grep -Eq '(^/|(^|/)\\.\\.(/|$))' "$members"; then
   echo "Unsafe archive traversal detected" >&2; exit 1
 fi
+# Do not perform cross-distribution application upgrades. In particular, NEVER
+# apply Debian-compiled artifacts over the existing Ubuntu 24.04 stable distro.
+identity="$(tar -xOf "$archive" opt/locas/bin/locas-os-base 2>/dev/null || true)"
+source_os="$(. /etc/os-release; printf '%s:%s' "$ID" "$VERSION_ID")"
+if [[ "$identity" != "$source_os" ]]; then
+  echo "Blocked cross-distribution LocasOS upgrade: installed=$source_os package=${identity:-unknown}. Use a fresh signed distro install and separately tested data migration." >&2
+  exit 1
+fi
 # Snapshot every pre-existing file the package can replace, not only Core/Agent.
 # Record package additions separately so a failed installation can remove them.
 backup_dir=/var/lib/locas-upgrades

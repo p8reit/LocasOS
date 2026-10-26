@@ -21,6 +21,7 @@ stage="$(mktemp -d)"
 trap 'rm -rf "$stage"; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 mkdir -p "$stage/opt/locas/bin" "$stage/etc/systemd/system" "$stage/usr/local/sbin"
 cp build/locas-core build/locas-agent build/locas-updater "$stage/opt/locas/bin/"
+printf 'debian:13\n' > "$stage/opt/locas/bin/locas-os-base"
 cp packaging/wsl/locas-core.service packaging/wsl/locas-agent.service \
    packaging/wsl/locas-app-worker.path packaging/wsl/locas-app-worker.service \
    "$stage/etc/systemd/system/"
