@@ -15,16 +15,25 @@ command -v xorriso >/dev/null || { echo 'Install xorriso' >&2; exit 1; }
 command -v python3 >/dev/null || exit 1
 [[ -s "${payload}.sha256" ]] || { echo 'Missing payload checksum' >&2; exit 1; }
 bash "$repo/packaging/native/validate-payload.sh" "$payload"
+if [[ -z "${LOCAS_NATIVE_VERIFY_BIN:-}" || ! -x "${LOCAS_NATIVE_VERIFY_BIN:-/nonexistent}" ||
+      -z "${LOCAS_NATIVE_VERSION:-}" || -z "${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" ]]; then
+  echo 'Native signing requires trusted verifier, public key and exact version' >&2; exit 1
+fi
+"$LOCAS_NATIVE_VERIFY_BIN" verify-native "$LOCAS_NATIVE_VERSION" "$(dirname "$payload")"
+test -s "$(dirname "$payload")/locasos-native.json"
+test -s "$(dirname "$payload")/locasos-native.sig"
 # Only embed a VM prototype, not execution hooks or autoinstall scripts.
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 install -m 0644 "$payload" "$stage/locasos-native-payload-amd64.tar"
 install -m 0644 "${payload}.sha256" "$stage/locasos-native-payload-amd64.tar.sha256"
+install -m 0644 "$(dirname "$payload")/locasos-native.json" "$stage/locasos-native.json"
+install -m 0644 "$(dirname "$payload")/locasos-native.sig" "$stage/locasos-native.sig"
 cat > "$stage/README.txt" <<'END'
 LocasOS experimental VM-only native payload.
 The installer is the unmodified interactive Ubuntu Server installer.
 It does not automatically install LocasOS applications or partition any disks.
-The embedded LocasOS payload has a checksum but NO independent publisher signature.
+The payload has a publisher signature. Verify independently before deploying.
 Do not use this ISO on physical hardware. No host disk auto-install is configured.
 END
 # Replay the original boot configuration from the authenticated ISO.
