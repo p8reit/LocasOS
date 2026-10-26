@@ -52,9 +52,8 @@ HOOK
 chmod 0755 "$workspace/config/hooks/live/"*.hook.chroot
 cd "$workspace"
 lb config --mode debian --distribution trixie --architectures amd64 \
-  --binary-images iso-hybrid --bootloaders grub-efi,syslinux \
+  --binary-images iso-hybrid \
   --debian-installer none --archive-areas "main" \
-  --image-name locasos-native-developer \
   --iso-application "LocasOS Developer Live" --iso-publisher "LocasOS Community" \
   --iso-volume "LOCASOS_DEV" --apt-recommends false
 lb build
