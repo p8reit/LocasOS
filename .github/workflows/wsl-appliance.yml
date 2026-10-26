@@ -37,7 +37,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($path in @('packaging/wsl/Install-LocasOS.ps1', 'packaging/wsl/Install-TestPackage.ps1', 'packaging/wsl/Install-LocasOS-WSL.ps1', 'packaging/wsl/Install-Release-LocasOS.ps1', 'packaging/wsl/Test-LocasOS.ps1', 'packaging/wsl/Backup-LocasOS-ForDebian.ps1', 'packaging/wsl/Test-DebianWSL-Release.ps1', 'packaging/wsl/Keep-LocasOS-Test-Running.ps1', 'packaging/wsl/Enable-LocasOS-Test-Keepalive.ps1', 'packaging/wsl/Disable-LocasOS-Test-Keepalive.ps1')) {
+          foreach ($path in @('packaging/wsl/Install-LocasOS.ps1', 'packaging/wsl/Install-TestPackage.ps1', 'packaging/wsl/Install-LocasOS-WSL.ps1', 'packaging/wsl/Install-Release-LocasOS.ps1', 'packaging/wsl/Test-LocasOS.ps1', 'packaging/wsl/Backup-LocasOS-ForDebian.ps1', 'packaging/wsl/Test-DebianWSL-Release.ps1', 'packaging/wsl/Keep-LocasOS-Test-Running.ps1', 'packaging/wsl/Enable-LocasOS-Test-Keepalive.ps1', 'packaging/wsl/Disable-LocasOS-Test-Keepalive.ps1', 'packaging/wsl/Install-Debian-EarlyAccess-Test.ps1')) {
             $tokens = $null; $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
             if ($errors.Count -gt 0) { throw "$path failed PowerShell parsing: $($errors | Out-String)" }
@@ -99,6 +99,7 @@ jobs:
           cp packaging/wsl/Keep-LocasOS-Test-Running.ps1 dist/
           cp packaging/wsl/Enable-LocasOS-Test-Keepalive.ps1 dist/
           cp packaging/wsl/Disable-LocasOS-Test-Keepalive.ps1 dist/
+          cp packaging/wsl/Install-Debian-EarlyAccess-Test.ps1 dist/
           cp packaging/wsl/README.md dist/TESTING.md
           cp packaging/wsl/Backup-LocasOS-ForDebian.ps1 dist/
           cp packaging/wsl/Test-DebianWSL-Release.ps1 dist/
@@ -140,6 +141,7 @@ jobs:
             dist/Keep-LocasOS-Test-Running.ps1
             dist/Enable-LocasOS-Test-Keepalive.ps1
             dist/Disable-LocasOS-Test-Keepalive.ps1
+            dist/Install-Debian-EarlyAccess-Test.ps1
             dist/TESTING.md
             dist/Backup-LocasOS-ForDebian.ps1
             dist/Test-DebianWSL-Release.ps1
