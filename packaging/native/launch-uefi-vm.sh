@@ -17,8 +17,8 @@ else
   iso="$(realpath -e -- "$1")"
   [[ -f "$iso" ]] || usage
   case "$(basename "$iso")" in
-    ubuntu-24.04*live-server-amd64.iso) ;;
-    *) echo 'Expected explicitly supplied Ubuntu 24.04 amd64 live-server ISO' >&2; exit 1 ;;
+    ubuntu-24.04*live-server-amd64.iso|locasos-native-uefi-vm-experimental.iso) ;;
+    *) echo 'Expected independently verified Ubuntu 24.04 ISO or LocasOS experimental VM ISO' >&2; exit 1 ;;
   esac
 fi
 for command in qemu-system-x86_64 qemu-img cp; do
