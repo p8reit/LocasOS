@@ -1,0 +1,47 @@
+name: Debian Native Live ISO
+on:
+  pull_request:
+    paths:
+      - 'packaging/debian/**'
+      - '.github/workflows/debian-native-iso.yml'
+      - 'packaging/native/**'
+      - 'cmd/**'
+      - 'internal/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      LOCAS_UPDATE_PUBLIC_KEY_B64: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Install Debian image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends live-build debootstrap xorriso squashfs-tools grub-efi-amd64-bin syslinux-common
+      - name: Build developer ISO (never deploy to disk)
+        run: |
+          test -n "$LOCAS_UPDATE_PUBLIC_KEY_B64"
+          bash -n packaging/debian/build-live-iso.sh
+          sudo --preserve-env=LOCAS_UPDATE_PUBLIC_KEY_B64,PATH bash packaging/debian/build-live-iso.sh
+      - name: Verify ISO identity and EFI metadata
+        run: |
+          cd dist/debian
+          sha256sum -c locasos-native-developer-amd64.iso.sha256
+          xorriso -indev locasos-native-developer-amd64.iso -report_el_torito plain | tee boot-report.txt
+          grep -Eiq 'EFI|platform id 0xef|UEFI' boot-report.txt
+      - name: Publish short-lived development artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: locasos-debian-native-developer-iso
+          path: |
+            dist/debian/locasos-native-developer-amd64.iso
+            dist/debian/locasos-native-developer-amd64.iso.sha256
+            dist/debian/boot-report.txt
+          retention-days: 3
