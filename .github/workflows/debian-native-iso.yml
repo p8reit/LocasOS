@@ -30,6 +30,7 @@ jobs:
           test -n "$LOCAS_UPDATE_PUBLIC_KEY_B64"
           bash -n packaging/debian/build-live-iso.sh
           sudo --preserve-env=LOCAS_UPDATE_PUBLIC_KEY_B64,PATH bash packaging/debian/build-live-iso.sh
+          sudo chown -R "$USER:$USER" dist build
       - name: Verify ISO identity and EFI metadata
         run: |
           cd dist/debian
