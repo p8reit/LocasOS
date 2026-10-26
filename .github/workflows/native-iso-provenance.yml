@@ -32,6 +32,7 @@ jobs:
           mkdir -m 0700 "$GNUPGHOME"
           gpg --batch --passphrase '' --quick-generate-key 'LocasOS CI temporary test only <ci@example.invalid>' ed25519 sign 0
           gpg --batch --export > "$tmp/test-trust.gpg"
+          export LOCAS_UBUNTU_CD_IMAGE_FINGERPRINT="$(gpg --with-colons --list-keys | awk -F: '$1=="fpr" {print $10; exit}')"
           echo 'synthetic test ISO content' > "$tmp/ubuntu-24.04.3-live-server-amd64.iso"
           (cd "$tmp" && sha256sum ubuntu-24.04.3-live-server-amd64.iso > SHA256SUMS)
           gpg --batch --yes --detach-sign --output "$tmp/SHA256SUMS.gpg" "$tmp/SHA256SUMS"
