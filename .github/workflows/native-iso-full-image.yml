@@ -46,8 +46,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          key="$(mktemp)"
-          trap 'rm -f "$key"' EXIT
+          keydir="$(mktemp -d)"
+          key="$keydir/private.key"
+          trap 'rm -rf "$keydir"' EXIT
           go run ./cmd/locas-release keygen "$key" > /tmp/locas-test-key.txt
           export LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64="$(cat "$key")"
           export LOCAS_UPDATE_PUBLIC_KEY_B64="$(go run ./cmd/locas-release public-key)"
