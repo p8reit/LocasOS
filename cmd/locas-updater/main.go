@@ -311,33 +311,52 @@ func setStatus(s status) {
 	_ = os.Rename(tmp.Name(), filepath.Join(stateDir, "status.json"))
 }
 
- 
 // checkReleaseOSBase stops distro-crossing upgrades BEFORE invoking the
 // on-disk shell installer. The signed bundle must carry an OS identity marker.
 func checkReleaseOSBase(archive, osRelease string) error {
 	file, err := os.Open(archive)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer file.Close()
 	reader := tar.NewReader(file)
 	var target string
 	for {
 		header, nextErr := reader.Next()
-		if errors.Is(nextErr, io.EOF) { break }
-		if nextErr != nil { return nextErr }
-		if strings.TrimPrefix(header.Name, "./") != "opt/locas/bin/locas-os-base" { continue }
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA { return errors.New("invalid release OS marker type") }
-		if header.Size > 64 { return errors.New("release OS marker too large") }
+		if errors.Is(nextErr, io.EOF) {
+			break
+		}
+		if nextErr != nil {
+			return nextErr
+		}
+		if strings.TrimPrefix(header.Name, "./") != "opt/locas/bin/locas-os-base" {
+			continue
+		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			return errors.New("invalid release OS marker type")
+		}
+		if header.Size > 64 {
+			return errors.New("release OS marker too large")
+		}
 		data, readErr := io.ReadAll(io.LimitReader(reader, 65))
-		if readErr != nil { return readErr }
+		if readErr != nil {
+			return readErr
+		}
 		target = strings.TrimSpace(string(data))
 		break
 	}
 	body, err := os.ReadFile(osRelease)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	var id, version string
 	for _, line := range strings.Split(string(body), "\n") {
-		if strings.HasPrefix(line, "ID=") { id = strings.Trim(strings.TrimPrefix(line, "ID="), "\"") }
-		if strings.HasPrefix(line, "VERSION_ID=") { version = strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), "\"") }
+		if strings.HasPrefix(line, "ID=") {
+			id = strings.Trim(strings.TrimPrefix(line, "ID="), "\"")
+		}
+		if strings.HasPrefix(line, "VERSION_ID=") {
+			version = strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), "\"")
+		}
 	}
 	current := id + ":" + version
 	if id == "" || version == "" || target != current {
