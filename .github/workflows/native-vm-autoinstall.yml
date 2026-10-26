@@ -45,7 +45,7 @@ jobs:
           assert d['version']==1
           assert d['storage']['layout']['name']=='direct'
           assert d['storage']['layout']['match']['serial']=='LOCASOS_VM_ONLY_001'
-          assert 'test "$(systemd-detect-virt)" = qemu' in d['early-commands']
+          assert any('systemd-detect-virt' in x and '= qemu' in x and '= kvm' in x for x in d['early-commands'])
           assert any('LOCASOS_VM_ONLY_001' in x for x in d['early-commands'])
           assert any('grep -c "^disk$"' in x for x in d['early-commands'])
           assert d['ssh']['allow-pw'] is False
