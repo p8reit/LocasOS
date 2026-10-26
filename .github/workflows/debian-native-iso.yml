@@ -24,7 +24,7 @@ jobs:
       - name: Install Debian image tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends live-build debootstrap xorriso squashfs-tools grub-efi-amd64-bin syslinux-common
+          sudo apt-get install -y --no-install-recommends live-build debootstrap xorriso squashfs-tools grub-efi-amd64-bin syslinux-common qemu-system-x86 ovmf
       - name: Build developer ISO (never deploy to disk)
         run: |
           test -n "$LOCAS_UPDATE_PUBLIC_KEY_B64"
@@ -37,6 +37,25 @@ jobs:
           sha256sum -c locasos-native-developer-amd64.iso.sha256
           xorriso -indev locasos-native-developer-amd64.iso -report_el_torito plain | tee boot-report.txt
           grep -Eiq 'EFI|platform id 0xef|UEFI' boot-report.txt
+      - name: UEFI QEMU live-boot smoke (diskless)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          firmware=
+          for option in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd; do
+            if [[ -f "$option" ]]; then firmware="$option"; break; fi
+          done
+          [[ -n "$firmware" ]] || { echo 'Missing OVMF firmware' >&2; exit 1; }
+          set +e
+          timeout 35 qemu-system-x86_64 \
+            -machine q35,accel=tcg -m 2048 -smp 2 \
+            -drive if=pflash,format=raw,readonly=on,file="$firmware" \
+            -cdrom dist/debian/locasos-native-developer-amd64.iso \
+            -boot order=d -nographic -serial none -monitor none -no-reboot
+          result=$?
+          set -e
+          [[ "$result" -eq 124 ]] || { echo "UEFI VM exited unexpectedly ($result)" >&2; exit 1; }
+          echo 'PASS: diskless UEFI VM smoke process alive (guest health still requires separate testing)'
       - name: Publish short-lived development artifact
         uses: actions/upload-artifact@v4
         with:
