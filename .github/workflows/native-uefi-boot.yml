@@ -77,22 +77,23 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          code=/usr/share/OVMF/OVMF_CODE_4M.fd
+          ovmf_code=/usr/share/OVMF/OVMF_CODE_4M.fd
           vars=/usr/share/OVMF/OVMF_VARS_4M.fd
-          test -f "$code" && test -f "$vars"
+          test -f "$ovmf_code" && test -f "$vars"
           cp "$vars" /tmp/locas-ovmf-vars.fd
           # No storage drives attached. This is only an ISO firmware/boot smoke test.
-          timeout --preserve-status 90s qemu-system-x86_64 \
+          exit_status=0
+          timeout 90s qemu-system-x86_64 \
             -machine q35,accel=tcg -m 3072 -smp 2 \
-            -drive if=pflash,format=raw,readonly=on,file="$code" \
+            -drive if=pflash,format=raw,readonly=on,file="$ovmf_code" \
             -drive if=pflash,format=raw,file=/tmp/locas-ovmf-vars.fd \
             -drive media=cdrom,format=raw,readonly=on,file=dist/native/locasos-native-uefi-vm-experimental.iso \
             -boot order=d -net none -display none \
             -serial file:/tmp/locas-uefi-serial.log \
             -monitor unix:/tmp/locas-monitor.sock,server=on,wait=off \
-            > /tmp/locas-qemu.log 2>&1 || code=$?
-          if [[ "${code:-124}" != 124 && "${code:-124}" != 143 ]]; then
-            echo "QEMU exited unexpectedly; status ${code:-unknown}" >&2
+            > /tmp/locas-qemu.log 2>&1 || exit_status=$?
+          if [[ "$exit_status" != 124 ]]; then
+            echo "QEMU exited unexpectedly; status $exit_status" >&2
             cat /tmp/locas-qemu.log
             exit 1
           fi
