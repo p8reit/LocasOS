@@ -77,7 +77,7 @@ jobs:
             dist/native-iso/locasos-native-uefi-vm-experimental.iso
           # Confirm payload files and preserved El Torito boot images exist.
           xorriso -indev dist/native-iso/locasos-native-uefi-vm-experimental.iso \
-            -find /locasos -type f -print
+            -ls /locasos
           xorriso -indev dist/native-iso/locasos-native-uefi-vm-experimental.iso \
             -report_el_torito plain > dist/native-iso/boot-catalog.txt
           grep -Eiq 'EFI|UEFI|platform id 0xef' dist/native-iso/boot-catalog.txt
