@@ -6,7 +6,7 @@ if [[ "$#" -ne 6 ]]; then
  echo 'Usage: stage-iso.sh BASE-ISO SHA256SUMS SHA256SUMS.gpg TRUSTED-KEYRING NATIVE-PAYLOAD.tar OUTPUT.iso' >&2; exit 2
 fi
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-"$repo/packaging/native/verify-ubuntu-iso.sh" "$1" "$2" "$3" "$4"
+bash "$repo/packaging/native/verify-ubuntu-iso.sh" "$1" "$2" "$3" "$4"
 payload="$(realpath -e -- "$5")"
 output="$6"
 [[ "$output" == *.iso ]] || { echo 'Output must be an ISO filename' >&2; exit 1; }
