@@ -28,7 +28,7 @@ def build_commands(iso, disk, firmware, memory_mb=4096, disk_gib=64):
         "-drive", "file=" + str(disk) + ",if=none,id=scratch,format=qcow2,cache=none",
         "-device", "scsi-hd,drive=scratch",
         "-drive", "file=" + str(iso) + ",media=cdrom,if=none,id=cd,readonly=on,format=raw",
-        "-device", "ide-cd,drive=cd",
+        "-device", "scsi-cd,drive=cd",
         "-boot", "order=d",
     ]
     if firmware:
