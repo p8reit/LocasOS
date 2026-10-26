@@ -1,3 +1,5 @@
+> **Release scope update (2026-10-26):** No Ubuntu LocasOS installations are in production. Migration/restore work described below is an internal legacy-development exercise, **not a prerequisite or supported customer path** for the first public Debian release. See [First Public Release](FIRST_PUBLIC_RELEASE.md). Fresh Debian installations are the release target.
+
 # Debian WSL Early Access migration and acceptance
 
 LocasOS Debian 13 is the shared platform for native and WSL builds. The prior signed v0.10.6 Stable WSL release is **Ubuntu 24.04** and remains untouched.
