@@ -5,7 +5,7 @@ $names = @(& wsl.exe --list --quiet | ForEach-Object { $_.Trim([char]0).Trim() }
 if ($LASTEXITCODE -ne 0 -or $names -notcontains 'LocasOS') { throw 'LocasOS not found. Nothing changed.' }
 $osText = (& wsl.exe -d LocasOS -u root -- cat /etc/os-release | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect installed OS.' }
-$osId = (($osText -split "\n" | Where-Object { $_ -match '^ID=' } | Select-Object -First 1) -replace '^ID=', '').Trim().Trim('"')
+$osId = (($osText -split "\r?\n" | Where-Object { $_ -match '^ID=' } | Select-Object -First 1) -replace '^ID=', '').Trim().Trim('"')
 New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
 $resolved = [IO.Path]::GetFullPath($BackupDir)
 $archive = Join-Path $resolved ("LocasOS-full-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + ".tar")
