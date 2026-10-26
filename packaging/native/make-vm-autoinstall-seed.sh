@@ -40,7 +40,7 @@ autoinstall:
     update: false
   early-commands:
     # Both virtualization and the unique disposable disk identity must match.
-    - 'test "\$(systemd-detect-virt)" = qemu'
+    - 'test "\$(systemd-detect-virt)" = qemu || test "\$(systemd-detect-virt)" = kvm'
     - 'test "\$(lsblk -dn -o TYPE | grep -c "^disk$")" -eq 1'
     - 'lsblk -dn -o SERIAL | grep -Fxq "LOCASOS_VM_ONLY_001"'
   identity:
