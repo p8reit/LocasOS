@@ -1,0 +1,26 @@
+name: Native installer storage preflight
+on:
+  pull_request:
+    paths:
+      - 'packaging/debian/installer/**'
+      - '.github/workflows/native-storage-preflight.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packaging/debian/installer/**'
+      - '.github/workflows/native-storage-preflight.yml'
+jobs:
+  read-only-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run storage classifier fixtures
+        run: python3 -m unittest discover -s packaging/debian/installer -p 'test_*.py' -v
+      - name: Validate parser syntax
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          for f in Path("packaging/debian/installer").glob("*.py"):
+              ast.parse(f.read_text(), filename=str(f))
+          PY
