@@ -21,15 +21,26 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-      - name: Install Debian image tools
+      - name: Build inside upstream Debian 13 container
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends live-build debootstrap xorriso squashfs-tools grub-efi-amd64-bin syslinux-common qemu-system-x86 ovmf
-      - name: Build developer ISO (never deploy to disk)
-        run: |
-          test -n "$LOCAS_UPDATE_PUBLIC_KEY_B64"
-          bash -n packaging/debian/build-live-iso.sh
-          sudo --preserve-env=LOCAS_UPDATE_PUBLIC_KEY_B64,PATH bash packaging/debian/build-live-iso.sh
+          set -Eeuo pipefail
+          # This privileged container runs ONLY on a disposable GitHub-hosted VM.
+          # Never run this command on physical LocasOS production hardware.
+          docker run --rm --privileged \
+            -v "$PWD:/src" -w /src \
+            -e LOCAS_UPDATE_PUBLIC_KEY_B64 \
+            debian:trixie bash -lc '
+              set -Eeuo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                ca-certificates golang-go live-build debootstrap xorriso \
+                squashfs-tools grub-efi-amd64-bin syslinux-common \
+                qemu-system-x86 ovmf
+              bash -n packaging/debian/build-live-iso.sh
+              bash packaging/debian/build-live-iso.sh
+            '
           sudo chown -R "$USER:$USER" dist build
       - name: Verify ISO identity and EFI metadata
         run: |
