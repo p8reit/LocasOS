@@ -14,16 +14,11 @@ mkdir -p "$workspace/config/package-lists" "$workspace/config/includes.chroot/us
 # Source-build payload remains explicitly VM-only and is NOT executed by the live image.
 install -m 0644 dist/native/locasos-native-payload-amd64.tar "$workspace/config/includes.chroot/usr/local/share/locasos/"
 install -m 0644 dist/native/locasos-native-payload-amd64.tar.sha256 "$workspace/config/includes.chroot/usr/local/share/locasos/"
-cat > "$workspace/config/package-lists/locasos.list.chroot" <<'LIST'
-systemd-sysv
-dbus-user-session
-ca-certificates
-curl
+# Reuse exactly the same baseline system dependencies as WSL.
+grep -Ev '^[[:space:]]*(#|$)' packaging/common/base-packages.txt > "$workspace/config/package-lists/locasos.list.chroot"
+cat >> "$workspace/config/package-lists/locasos.list.chroot" <<'LIST'
 openssh-client
 pciutils
-iproute2
-procps
-python3
 LIST
 # Debian Live defaults to a live session, not automatic host disk installation.
 cat > "$workspace/config/hooks/live/010-locasos-brand.hook.chroot" <<'HOOK'
