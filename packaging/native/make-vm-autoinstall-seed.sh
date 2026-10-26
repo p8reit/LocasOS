@@ -20,8 +20,9 @@ if [[ -e "$workspace" && -n "$(find "$workspace" -mindepth 1 -print -quit)" ]]; 
 fi
 mkdir -p -- "$workspace"
 workspace="$(realpath -e -- "$workspace")"
-key="$(head -n 1 "$pubkey")"
-[[ "$key" =~ ^ssh-(ed25519|rsa)[[:space:]][A-Za-z0-9+/=]+([[:space:]].*)?$ ]] || {
+read -r key_type key_data _ < "$pubkey" || true
+key="$key_type $key_data"
+[[ "$key_type" =~ ^ssh-(ed25519|rsa)$ && "$key_data" =~ ^[A-Za-z0-9+/=]+$ ]] || {
   echo 'Expected a valid-looking OpenSSH public key' >&2; exit 1
 }
 # Password is intentionally random and never logged. SSH key access only.
