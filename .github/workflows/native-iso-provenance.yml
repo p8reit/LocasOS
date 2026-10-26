@@ -37,6 +37,12 @@ jobs:
           (cd "$tmp" && sha256sum ubuntu-24.04.3-live-server-amd64.iso > SHA256SUMS)
           gpg --batch --yes --detach-sign --output "$tmp/SHA256SUMS.gpg" "$tmp/SHA256SUMS"
           bash packaging/native/verify-ubuntu-iso.sh "$tmp/ubuntu-24.04.3-live-server-amd64.iso" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.gpg" "$tmp/test-trust.gpg"
+          expected_fpr="$LOCAS_UBUNTU_CD_IMAGE_FINGERPRINT"
+          export LOCAS_UBUNTU_CD_IMAGE_FINGERPRINT=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          if bash packaging/native/verify-ubuntu-iso.sh "$tmp/ubuntu-24.04.3-live-server-amd64.iso" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.gpg" "$tmp/test-trust.gpg"; then
+            echo 'FAIL: accepted valid signature from the wrong pinned signer' >&2; exit 1
+          fi
+          export LOCAS_UBUNTU_CD_IMAGE_FINGERPRINT="$expected_fpr"
           echo 'tamper' >> "$tmp/ubuntu-24.04.3-live-server-amd64.iso"
           if bash packaging/native/verify-ubuntu-iso.sh "$tmp/ubuntu-24.04.3-live-server-amd64.iso" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.gpg" "$tmp/test-trust.gpg"; then
             echo 'FAIL: accepted tampered ISO' >&2; exit 1
