@@ -47,6 +47,8 @@ jobs:
           cp packaging/wsl/Install-Release-LocasOS.ps1 dist/
           cp packaging/wsl/Install-LocasOS-WSL.ps1 dist/
           cp packaging/wsl/upgrade-locas.sh dist/
+          cp packaging/wsl/Backup-LocasOS-ForDebian.ps1 dist/
+          cp packaging/wsl/Test-DebianWSL-Release.ps1 dist/
           bash -n dist/upgrade-locas.sh
       - name: Sign exact update archive manifest
         env:
@@ -87,6 +89,7 @@ jobs:
             locasos-upgrade-amd64.tar locasos-upgrade-amd64.tar.sha256
             locasos-update.json locasos-update.sig
             Upgrade-LocasOS.ps1 upgrade-locas.sh
+            Backup-LocasOS-ForDebian.ps1 Test-DebianWSL-Release.ps1
           )
           for asset in "${required[@]}"; do
             test -s "dist/$asset" || { echo "::error::Missing or empty release artifact $asset"; exit 1; }
@@ -116,6 +119,8 @@ jobs:
             dist/locasos-update.sig \
             dist/Upgrade-LocasOS.ps1 \
             dist/upgrade-locas.sh \
+            dist/Backup-LocasOS-ForDebian.ps1 \
+            dist/Test-DebianWSL-Release.ps1 \
             --verify-tag --generate-notes --prerelease
       - name: Verify published WSL release asset inventory
         env:
