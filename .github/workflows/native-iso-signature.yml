@@ -1,0 +1,50 @@
+name: Native ISO Publisher Signature
+on:
+  pull_request:
+    paths:
+      - 'cmd/locas-release/**'
+      - '.github/workflows/native-iso-signature.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/locas-release/**'
+      - '.github/workflows/native-iso-signature.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  iso-signature:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Go formatting and tests
+        run: |
+          test -z "$(gofmt -l cmd/locas-release)"
+          go test ./...
+      - name: Native ISO signed identity, substitution and tampering checks
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          go build -o "$tmp/locas-release" ./cmd/locas-release
+          "$tmp/locas-release" keygen "$tmp/signing-key" > "$tmp/keygen"
+          export LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64="$(cat "$tmp/signing-key")"
+          export LOCAS_UPDATE_PUBLIC_KEY_B64="$(sed -n 's/^Public verification key: //p' "$tmp/keygen")"
+          echo 'synthetic VM ISO bytes' > "$tmp/locasos-native-uefi-vm-experimental.iso"
+          "$tmp/locas-release" sign-native-iso v0.11.0 0123456789abcdef0123456789abcdef01234567 "$tmp"
+          "$tmp/locas-release" verify-native-iso v0.11.0 "$tmp"
+          if "$tmp/locas-release" verify-native-iso v0.11.1 "$tmp"; then
+            echo 'FAIL: accepted mismatched native ISO version' >&2; exit 1
+          fi
+          if "$tmp/locas-release" verify-native v0.11.0 "$tmp"; then
+            echo 'FAIL: native VM payload verifier accepted ISO identity' >&2; exit 1
+          fi
+          echo 'tampered' >> "$tmp/locasos-native-uefi-vm-experimental.iso"
+          if "$tmp/locas-release" verify-native-iso v0.11.0 "$tmp"; then
+            echo 'FAIL: native ISO tampering accepted' >&2; exit 1
+          fi
+          echo 'PASS: native ISO publisher signature tests'
