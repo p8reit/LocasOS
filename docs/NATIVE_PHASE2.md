@@ -11,7 +11,7 @@
 
 ```bash
 bash packaging/native/verify-ubuntu-iso.sh \
-  ~/isos/ubuntu-24.04.3-live-server-amd64.iso \
+  ~/isos/ubuntu-24.04.5-live-server-amd64.iso \
   ~/isos/SHA256SUMS ~/isos/SHA256SUMS.gpg ~/trust/ubuntu-cdimage.gpg
 ```
 
@@ -21,7 +21,7 @@ The exact `24.04.x` point-release suffix may differ; use the appropriate signed 
 
 ```bash
 bash packaging/native/stage-iso.sh \
-  ~/isos/ubuntu-24.04.3-live-server-amd64.iso \
+  ~/isos/ubuntu-24.04.5-live-server-amd64.iso \
   ~/isos/SHA256SUMS ~/isos/SHA256SUMS.gpg ~/trust/ubuntu-cdimage.gpg \
   dist/native/locasos-native-payload-amd64.tar \
   dist/native/locasos-native-uefi-vm-experimental.iso
@@ -67,3 +67,9 @@ export LOCAS_NATIVE_VERSION=v0.11.0
 The experimental ISO staging tool also refuses unsigned or improperly signed native payloads; `locasos-native.json` and `locasos-native.sig` are embedded as data alongside the archive. CI uses only an ephemeral test signing key; **it does not publish a native release**.
 
 There is still no automatic application installation in the ISO or recovery-capable disk installer. A staged ISO must be booted and the full VM lifecycle tested before it can be called a validated boot image.
+
+## Automated real-ISO UEFI smoke test
+
+GitHub Actions `Native UEFI ISO Boot Smoke` downloads the official Ubuntu 24.04.5 Server AMD64 image, verifies its SHA256SUMS signature against the runner's trusted Ubuntu CD signing key (documented fingerprint `843938DF228D22F7B3742BC0D94AA3F0EFE21092`), checks the ISO hash, signs a disposable native VM payload with an ephemeral **test-only** key, remasters the ISO while replaying Ubuntu's boot metadata, checks EFI El Torito metadata and runs OVMF/QEMU with **no attached writable disk**.
+
+This job can take substantial time and bandwidth because the upstream ISO is multiple gigabytes. The test does not certify installer UI correctness, guest OS boot completion or disk installation: those require a disposable VM with a new qcow2 disk plus guest verification and reboot. It deliberately uploads logs rather than the large unsigned experimental ISO.
