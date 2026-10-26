@@ -1,0 +1,54 @@
+name: Native ISO Provenance
+on:
+  pull_request:
+    paths:
+      - 'packaging/native/**'
+      - 'docs/NATIVE_PHASE2.md'
+      - '.github/workflows/native-iso-provenance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packaging/native/**'
+      - 'docs/NATIVE_PHASE2.md'
+      - '.github/workflows/native-iso-provenance.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  provenance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell
+        run: bash -n packaging/native/verify-ubuntu-iso.sh packaging/native/stage-iso.sh packaging/native/launch-uefi-vm.sh
+      - name: Prove signed-manifest and tamper rejection with isolated test key
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          export GNUPGHOME="$tmp/gnupg"
+          mkdir -m 0700 "$GNUPGHOME"
+          gpg --batch --passphrase '' --quick-generate-key 'LocasOS CI temporary test only <ci@example.invalid>' ed25519 sign 0
+          gpg --batch --export > "$tmp/test-trust.gpg"
+          echo 'synthetic test ISO content' > "$tmp/ubuntu-24.04.3-live-server-amd64.iso"
+          (cd "$tmp" && sha256sum ubuntu-24.04.3-live-server-amd64.iso > SHA256SUMS)
+          gpg --batch --yes --detach-sign --output "$tmp/SHA256SUMS.gpg" "$tmp/SHA256SUMS"
+          bash packaging/native/verify-ubuntu-iso.sh "$tmp/ubuntu-24.04.3-live-server-amd64.iso" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.gpg" "$tmp/test-trust.gpg"
+          echo 'tamper' >> "$tmp/ubuntu-24.04.3-live-server-amd64.iso"
+          if bash packaging/native/verify-ubuntu-iso.sh "$tmp/ubuntu-24.04.3-live-server-amd64.iso" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.gpg" "$tmp/test-trust.gpg"; then
+            echo 'FAIL: accepted tampered ISO' >&2; exit 1
+          fi
+          printf '#unauthorized\n' >> "$tmp/SHA256SUMS"
+          if bash packaging/native/verify-ubuntu-iso.sh "$tmp/ubuntu-24.04.3-live-server-amd64.iso" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.gpg" "$tmp/test-trust.gpg"; then
+            echo 'FAIL: accepted invalid manifest signature' >&2; exit 1
+          fi
+      - name: Verify non-destructive stage invocation contracts
+        run: |
+          if bash packaging/native/stage-iso.sh; then
+            echo 'FAIL: ISO stage should require explicit authenticated inputs' >&2; exit 1
+          fi
+          if bash packaging/native/verify-ubuntu-iso.sh; then
+            echo 'FAIL: ISO verifier should reject absent inputs' >&2; exit 1
+          fi
