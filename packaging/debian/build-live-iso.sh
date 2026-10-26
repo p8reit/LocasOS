@@ -36,7 +36,20 @@ PRETTY_NAME="LocasOS Developer Live (Debian-based)"
 EDITION="native-developer-preview"
 RELEASE
 HOOK
-chmod 0755 "$workspace/config/hooks/live/010-locasos-brand.hook.chroot"
+cat > "$workspace/config/hooks/live/020-locasos-services.hook.chroot" <<'HOOK'
+#!/bin/sh
+set -eu
+# Image-build-time extraction into the disposable rootfs, never a host system.
+for user in locas-core locas-agent locas-ollama; do
+  if ! id "$user" >/dev/null 2>&1; then
+    useradd --system --create-home --shell /usr/sbin/nologin "$user"
+  fi
+done
+tar -C / -xf /usr/local/share/locasos/locasos-native-payload-amd64.tar --no-same-owner
+systemctl enable locas-firstboot.service locas-agent.service locas-core.service
+# Path workers are not enabled by default until native lifecycle approval is complete.
+HOOK
+chmod 0755 "$workspace/config/hooks/live/"*.hook.chroot
 cd "$workspace"
 lb config --mode debian --distribution trixie --architectures amd64 \
   --binary-images iso-hybrid --bootloaders grub-efi,syslinux \
