@@ -1,0 +1,61 @@
+name: Native Disposable VM Autoinstall Contract
+on:
+  pull_request:
+    paths:
+      - 'packaging/native/**'
+      - 'docs/NATIVE_VM_ACCEPTANCE.md'
+      - '.github/workflows/native-vm-autoinstall.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packaging/native/**'
+      - 'docs/NATIVE_VM_ACCEPTANCE.md'
+      - '.github/workflows/native-vm-autoinstall.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  seed-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install seed tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends cloud-image-utils python3-yaml
+      - name: Verify generator and QEMU launchers syntax
+        run: |
+          bash -n packaging/native/make-vm-autoinstall-seed.sh packaging/native/launch-vm-autoinstall.sh packaging/native/boot-installed-vm.sh
+      - name: Reject missing operator acknowledgment and inspect safely-generated seed
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          ssh-keygen -q -t ed25519 -N '' -f "$tmp/key"
+          if bash packaging/native/make-vm-autoinstall-seed.sh "$tmp/seed" "$tmp/key.pub"; then
+            echo 'FAIL: generated destructive VM seed without opt-in' >&2
+            exit 1
+          fi
+          export LOCAS_NATIVE_VM_AUTOINSTALL_ACK=I_ACCEPT_ERASING_A_DISPOSABLE_QEMU_IMAGE_ONLY
+          bash packaging/native/make-vm-autoinstall-seed.sh "$tmp/seed" "$tmp/key.pub"
+          test -s "$tmp/seed/seed.iso"
+          python3 - "$tmp/seed/user-data" <<'PY'
+          import sys,yaml
+          d=yaml.safe_load(open(sys.argv[1],encoding='utf8'))['autoinstall']
+          assert d['version']==1
+          assert d['storage']['layout']['name']=='direct'
+          assert d['storage']['layout']['match']['serial']=='LOCASOS_VM_ONLY_001'
+          assert any('systemd-detect-virt' in x and '= qemu' in x and '= kvm' in x for x in d['early-commands'])
+          assert any('LOCASOS_VM_ONLY_001' in x for x in d['early-commands'])
+          assert any('grep -c "^disk$"' in x for x in d['early-commands'])
+          assert d['ssh']['allow-pw'] is False
+          assert d['ssh']['authorized-keys'][0].startswith('ssh-ed25519 ')
+          assert d['shutdown']=='poweroff'
+          print('PASS: disposable VM-only autoinstall seed safety contract')
+          PY
+          if bash packaging/native/make-vm-autoinstall-seed.sh "$tmp/seed" "$tmp/key.pub"; then
+            echo 'FAIL: overwrote existing VM seed' >&2; exit 1
+          fi
+          if bash packaging/native/launch-vm-autoinstall.sh; then
+            echo 'FAIL: launcher allowed missing explicit ISO, seed and workspace' >&2; exit 1
+          fi

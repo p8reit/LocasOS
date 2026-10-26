@@ -57,6 +57,20 @@ systemctl start locas-firstboot.service
 systemctl start locas-agent.service
 systemctl start locas-core.service
 systemctl start locas-app-worker.path locas-update-worker.path
-systemctl is-active --quiet locas-agent.service locas-core.service
-curl --fail --silent --show-error --max-time 5 http://127.0.0.1:59420/healthz | grep -q '"status":"ok"'
+ready=false
+for attempt in $(seq 1 30); do
+  if systemctl is-active --quiet locas-agent.service locas-core.service &&
+     curl --fail --silent --show-error --max-time 3 http://127.0.0.1:59420/healthz 2>/dev/null |
+       grep -q '"status":"ok"'; then
+    ready=true
+    break
+  fi
+  sleep 2
+done
+if [[ "$ready" != true ]]; then
+  echo 'FAIL: native LocasOS services failed to become healthy; guest preserved' >&2
+  systemctl status locas-firstboot.service locas-agent.service locas-core.service --no-pager -l || true
+  journalctl -b -u locas-firstboot.service -u locas-agent.service -u locas-core.service --no-pager -n 120 || true
+  exit 1
+fi
 echo 'PASS: native disposable VM LocasOS agent/core and localhost health'
