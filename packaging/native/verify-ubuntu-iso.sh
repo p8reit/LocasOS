@@ -15,7 +15,17 @@ case "$(basename "$iso")" in
 esac
 command -v gpgv >/dev/null || { echo 'Missing gpgv' >&2; exit 1; }
 # NEVER auto-download a key from the same source as the ISO or accept an untrusted key.
-gpgv --keyring "$keyring" "$signature" "$sums"
+# The official Ubuntu CD Image Automatic Signing Key (2012), published by Canonical.
+# Do not accept unrelated archive-signing keys from the same keyring.
+expected_fpr="${LOCAS_UBUNTU_CD_IMAGE_FINGERPRINT:-843938DF228D22F7B3742BC0D94AA3F0EFE21092}"
+[[ "$expected_fpr" =~ ^[0-9A-F]{40}$ ]] || { echo 'Invalid expected signer fingerprint' >&2; exit 1; }
+status="$(gpgv --status-fd 1 --keyring "$keyring" "$signature" "$sums" 2>&1)" || {
+  printf '%s\n' "$status" >&2; exit 1
+}
+if ! printf '%s\n' "$status" | awk -v fpr="$expected_fpr" '$2=="VALIDSIG" && $3==fpr {found=1} END{exit !found}'; then
+  echo "Signed manifest not authenticated by pinned Ubuntu CD key: $expected_fpr" >&2
+  exit 1
+fi
 # Ubuntu SHA256SUMS is a text manifest. Match the exact basename once.
 digest="$(awk -v name="$(basename "$iso")" '
   {
