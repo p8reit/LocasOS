@@ -17,7 +17,8 @@ jobs:
       - name: Run storage classifier fixtures
         run: python3 -m unittest discover -s packaging/debian/installer -p 'test_*.py' -v
       - name: Validate parser syntax
-        run: python3 - <<'PY'
+        run: |
+          python3 - <<'PY'
           import ast
           from pathlib import Path
           for f in Path("packaging/debian/installer").glob("*.py"):
