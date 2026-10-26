@@ -26,6 +26,20 @@ type installManifest struct {
 }
 
 func main() {
+	if len(os.Args) == 5 && os.Args[1] == "sign-native" {
+		if err := nativeSigning(os.Args[2], os.Args[3], os.Args[4]); err != nil {
+			fatal(err.Error())
+		}
+		fmt.Println("PASS: native VM manifest signed")
+		return
+	}
+	if len(os.Args) == 4 && os.Args[1] == "verify-native" {
+		if err := nativeVerification(os.Args[2], os.Args[3]); err != nil {
+			fatal(err.Error())
+		}
+		fmt.Println("PASS: signed native VM payload verified")
+		return
+	}
 	if len(os.Args) == 4 && os.Args[1] == "verify-install" {
 		if err := verifyInstall(os.Args[2], os.Args[3]); err != nil {
 			fatal(err.Error())

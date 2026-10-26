@@ -27,6 +27,15 @@ expected="$(awk 'NR == 1 {print $1}' "$checksum")"
 [[ "$expected" =~ ^[a-fA-F0-9]{64}$ ]] || { echo 'Invalid checksum' >&2; exit 1; }
 actual="$(sha256sum "$payload" | awk '{print $1}')"
 [[ "$actual" == "$expected" ]] || { echo 'Payload checksum mismatch' >&2; exit 1; }
+# Publisher authentication is mandatory, not merely a matching checksum.
+# Verifier binary and publisher public key MUST be obtained independently of the archive.
+if [[ -z "${LOCAS_NATIVE_VERIFY_BIN:-}" || ! -x "${LOCAS_NATIVE_VERIFY_BIN:-/nonexistent}" ]]; then
+ echo 'Set LOCAS_NATIVE_VERIFY_BIN to the independently obtained trusted locas-release verifier' >&2; exit 1
+fi
+if [[ -z "${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" || -z "${LOCAS_NATIVE_VERSION:-}" ]]; then
+ echo 'Set independently trusted LOCAS_UPDATE_PUBLIC_KEY_B64 and LOCAS_NATIVE_VERSION' >&2; exit 1
+fi
+"$LOCAS_NATIVE_VERIFY_BIN" verify-native "$LOCAS_NATIVE_VERSION" "$(dirname "$payload")"
 # Validate archive types and paths: never unpack symlinks or device nodes as root.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 "$script_dir/verify-archive.py" "$payload"
