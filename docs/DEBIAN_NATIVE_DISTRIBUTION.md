@@ -6,7 +6,7 @@ LocasOS is moving toward its own independently branded Debian-derived headless a
 - Debian `live-build`, Debian trixie (Debian 13), amd64, hybrid ISO with EFI boot metadata.
 - LocasOS release identity and branding, developer payload staged as data only.
 - No disk partitioning, automatic installation, OS overwrite, or physical host install operations.
-- No model downloads or secret credentials baked into ISO. Application services are **not yet installed or enabled in the live rootfs**.
+- No model downloads or secret credentials baked into ISO. Build-time hooks install the LocasOS Core and Agent binaries and systemd units into the **disposable live rootfs** and enable core/agent for the live session. This is ephemeral and does not install an OS to a physical disk. Updater and app-install worker paths remain disabled.
 - The existing `v0.10.6` signed WSL Stable channel remains unchanged.
 - The native application payload currently uses a trusted updater public key at build and needs a signed native production release before deployment. Its checksum alone does not prove publisher identity.
 - Debian package copyrights, source offers, licenses, required attribution and third-party trademarks must be reviewed before a redistribution release.
