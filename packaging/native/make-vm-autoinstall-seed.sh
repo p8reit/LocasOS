@@ -28,6 +28,8 @@ key="$key_type $key_data"
 # Password is intentionally random and never logged. SSH key access only.
 password="$(openssl rand -base64 48)"
 hash="$(printf %s "$password" | openssl passwd -6 -stdin)"
+printf %s "$password" > "$workspace/vm-test-password"
+chmod 0600 "$workspace/vm-test-password"
 unset password
 cat > "$workspace/user-data" <<EOF
 #cloud-config
