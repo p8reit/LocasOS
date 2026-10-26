@@ -2,7 +2,12 @@ name: Native UEFI ISO Boot Smoke
 on:
   pull_request:
     paths:
-      - 'packaging/native/**'
+      - 'packaging/native/stage-iso.sh'
+      - 'packaging/native/verify-ubuntu-iso.sh'
+      - 'packaging/native/validate-payload.sh'
+      - 'packaging/native/build-payload.sh'
+      - 'packaging/native/verify-archive.py'
+      - 'cmd/locas-release/**'
       - '.github/workflows/native-uefi-boot.yml'
   workflow_dispatch:
 permissions:
