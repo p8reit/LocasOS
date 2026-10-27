@@ -3,6 +3,7 @@
 set -Eeuo pipefail
 fail(){ echo "LOCASOS_VM_INSTALL_FAIL: $*" > /dev/ttyS0; exit 1; }
 mark(){ echo "LOCASOS_VM_INSTALL_$1" > /dev/ttyS0; }
+trap 'fail "unexpected command failure at line $LINENO"' ERR
 [[ $(id -u) -eq 0 ]] || fail "root required"
 [[ -f /etc/locasos-release ]] || fail "not a LocasOS live image"
 grep -q 'EDITION="native-developer-preview"' /etc/locasos-release || fail "wrong edition"
@@ -29,6 +30,7 @@ sgdisk --new=3:0:+12GiB --typecode=3:8300 --change-name=3:ROOT_B "$disk"
 sgdisk --new=4:0:+4GiB --typecode=4:8300 --change-name=4:RECOVERY "$disk"
 sgdisk --new=5:0:0 --typecode=5:8300 --change-name=5:DATA "$disk"
 partprobe "$disk"; udevadm settle
+mark "PARTITIONED"
 esp="${disk}1"; root="${disk}2"; backup="${disk}3"; recovery="${disk}4"; data="${disk}5"
 for path in "$esp" "$root" "$backup" "$recovery" "$data"; do [[ -b "$path" ]] || fail "partition missing: $path"; done
 mkfs.vfat -F 32 "$esp"
@@ -44,6 +46,7 @@ rsync -aHAX --numeric-ids --one-file-system --exclude=/proc/*** --exclude=/sys/*
  --exclude=/dev/*** --exclude=/run/*** --exclude=/tmp/*** \
  --exclude=/mnt/*** --exclude=/media/*** --exclude=/live/*** \
  / /mnt/locasos-target/
+mark "ROOT_COPIED"
 mkdir -p /mnt/locasos-target/{dev,proc,sys,run,boot/efi,var/lib/locas}
 mount "$esp" /mnt/locasos-target/boot/efi
 uuid="$(blkid -s UUID -o value "$root")"
@@ -58,6 +61,7 @@ for d in dev proc sys run; do mount --bind "/$d" "/mnt/locasos-target/$d"; done
 # UEFI removable path avoids modifying host EFI variables, even in QEMU.
 chroot /mnt/locasos-target grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=LocasOS --removable --no-nvram --recheck || fail "grub-install failed"
 chroot /mnt/locasos-target update-grub || fail "update-grub failed"
+mark "EFI_CONFIGURED"
 touch /mnt/locasos-target/etc/locasos-installed-vm-test
 sync
 mark 'COMPLETE'
