@@ -1,0 +1,10 @@
+[Unit]
+Description=LocasOS developer VM serial health marker
+After=locas-core.service
+Requires=locas-core.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/locasos-guest-health.sh
+TimeoutStartSec=240
+[Install]
+WantedBy=multi-user.target
