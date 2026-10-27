@@ -14,11 +14,27 @@ mkdir -p "$workspace/config/package-lists" "$workspace/config/includes.chroot/us
 # Source-build payload remains explicitly VM-only and is NOT executed by the live image.
 install -m 0644 dist/native/locasos-native-payload-amd64.tar "$workspace/config/includes.chroot/usr/local/share/locasos/"
 install -m 0644 dist/native/locasos-native-payload-amd64.tar.sha256 "$workspace/config/includes.chroot/usr/local/share/locasos/"
+# VM-only developer readiness marker and disposable QEMU install machinery.
+mkdir -p "$workspace/config/includes.chroot/usr/local/libexec" "$workspace/config/includes.chroot/etc/systemd/system"
+install -m 0755 packaging/debian/installer/guest-health.sh "$workspace/config/includes.chroot/usr/local/libexec/locasos-guest-health.sh"
+install -m 0755 packaging/debian/installer/install-qemu-only.sh "$workspace/config/includes.chroot/usr/local/libexec/locasos-install-qemu-only.sh"
+install -m 0644 packaging/debian/installer/locasos-guest-health.service "$workspace/config/includes.chroot/etc/systemd/system/"
+install -m 0644 packaging/debian/installer/locasos-install-qemu-only.service "$workspace/config/includes.chroot/etc/systemd/system/"
 # Reuse exactly the same baseline system dependencies as WSL.
 grep -Ev '^[[:space:]]*(#|$)' packaging/common/base-packages.txt > "$workspace/config/package-lists/locasos.list.chroot"
 cat >> "$workspace/config/package-lists/locasos.list.chroot" <<'LIST'
 openssh-client
 pciutils
+python3
+curl
+rsync
+gdisk
+parted
+dosfstools
+e2fsprogs
+grub-efi-amd64-bin
+grub2-common
+initramfs-tools
 LIST
 # Debian Live defaults to a live session, not automatic host disk installation.
 cat > "$workspace/config/hooks/live/010-locasos-brand.hook.chroot" <<'HOOK'
@@ -42,6 +58,7 @@ for user in locas-core locas-agent locas-ollama; do
 done
 tar -C / -xf /usr/local/share/locasos/locasos-native-payload-amd64.tar --no-same-owner
 systemctl enable locas-firstboot.service locas-agent.service locas-core.service
+systemctl enable locasos-guest-health.service locasos-install-qemu-only.service
 # Path workers are not enabled by default until native lifecycle approval is complete.
 HOOK
 chmod 0755 "$workspace/config/hooks/live/"*.hook.chroot
