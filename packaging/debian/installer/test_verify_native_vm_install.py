@@ -14,6 +14,11 @@ class VMInstallSafetyTests(unittest.TestCase):
         self.assertIn("name=opt/locasos/dev-install,string=LOCASOS_DISPOSABLE_VM_INSTALL_V1", args)
         self.assertFalse(any("/dev/sd" in x or "/dev/nvme" in x for x in args))
         self.assertIn("scsi-hd,drive=scratch,serial=locasos-scratch", args)
+    def test_live_health_boot_cannot_trigger_disk_install(self):
+        args = m.vm_cmd(pathlib.Path("/tmp/code.fd"), pathlib.Path("/tmp/vars.fd"),
+                        pathlib.Path("/tmp/scratch.qcow2"), pathlib.Path("/tmp/live.iso"), enable_install=False)
+        self.assertFalse(any("fw_cfg" in x or "DISPOSABLE_VM_INSTALL" in x for x in args))
+        self.assertTrue(any("readonly=on" in x and "live.iso" in x for x in args))
     def test_second_boot_has_no_install_marker_or_iso(self):
         args = m.vm_cmd(pathlib.Path("/tmp/code.fd"), pathlib.Path("/tmp/vars.fd"),
                         pathlib.Path("/tmp/scratch.qcow2"))
