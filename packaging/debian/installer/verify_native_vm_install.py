@@ -8,7 +8,7 @@ import sys
 import tempfile
 from disposable_vm import checksum
 
-def vm_cmd(code, varsfile, disk, iso=None):
+def vm_cmd(code, varsfile, disk, iso=None, enable_install=True):
     args = ["qemu-system-x86_64", "-nodefaults", "-machine", "q35,accel=tcg",
             "-m", "4096", "-smp", "2", "-vga", "std", "-display", "none", "-serial", "stdio",
             "-monitor", "none", "-no-reboot", "-net", "none",
@@ -20,8 +20,9 @@ def vm_cmd(code, varsfile, disk, iso=None):
     if iso is not None:
         args += ["-drive", "if=none,id=cd,format=raw,readonly=on,media=cdrom,file=" + str(iso),
                  "-device", "scsi-cd,drive=cd",
-                 "-fw_cfg", "name=opt/locasos/dev-install,string=LOCASOS_DISPOSABLE_VM_INSTALL_V1",
                  "-boot", "order=d"]
+        if enable_install:
+            args += ["-fw_cfg", "name=opt/locasos/dev-install,string=LOCASOS_DISPOSABLE_VM_INSTALL_V1"]
     else:
         args += ["-boot", "order=c"]
     return args
@@ -77,6 +78,7 @@ def main():
     ap.add_argument("--sha256", required=True)
     ap.add_argument("--ovmf-code", type=pathlib.Path, required=True)
     ap.add_argument("--ovmf-vars", type=pathlib.Path, required=True)
+    ap.add_argument("--live-timeout", type=int, default=300)
     ap.add_argument("--install-timeout", type=int, default=900)
     ap.add_argument("--boot-timeout", type=int, default=300)
     args = ap.parse_args()
@@ -89,6 +91,7 @@ def main():
         varsfile = pathlib.Path(tmp) / "OVMF_VARS.fd"
         shutil.copyfile(args.ovmf_vars, varsfile)
         subprocess.run(["qemu-img", "create", "-f", "qcow2", str(disk), "64G"], check=True)
+        run_until_marker(vm_cmd(args.ovmf_code, varsfile, disk, iso, enable_install=False), "LOCASOS_GUEST_HEALTH_OK", args.live_timeout)
         run_until_marker(vm_cmd(args.ovmf_code, varsfile, disk, iso), "LOCASOS_VM_INSTALL_COMPLETE", args.install_timeout)
         run_until_marker(vm_cmd(args.ovmf_code, varsfile, disk), "LOCASOS_INSTALLED_BOOT_OK", args.boot_timeout)
     print("PASS: Scratch-only Debian LocasOS install, EFI reboot and Core health")
