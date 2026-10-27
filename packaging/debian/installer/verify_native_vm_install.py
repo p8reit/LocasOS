@@ -27,17 +27,49 @@ def vm_cmd(code, varsfile, disk, iso=None):
     return args
 
 def run_until_marker(cmd, marker, timeout):
+    # Stop as soon as the guest attests readiness; no need to wait out the full timeout.
+    import os
+    import selectors
+    import time
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+    logs = bytearray()
+    found = False
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, errors="replace")
-        output = p.stdout + "\n" + p.stderr
-    except subprocess.TimeoutExpired as exc:
-        output = (exc.stdout or b"").decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-        output += "\n" + ((exc.stderr or b"").decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else (exc.stderr or ""))
-    print(output[-12000:], flush=True)
-    if "LOCASOS_VM_INSTALL_FAIL" in output or "LOCASOS_GUEST_HEALTH_FAILED" in output:
-        raise RuntimeError("Guest reported an explicit failure")
-    if marker not in output:
-        raise RuntimeError("Expected guest serial marker missing: " + marker)
+        with selectors.DefaultSelector() as selector:
+            selector.register(proc.stdout, selectors.EVENT_READ)
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline:
+                events = selector.select(timeout=min(1.0, max(0, deadline - time.monotonic())))
+                for key, _ in events:
+                    chunk = os.read(key.fd, 65536)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        continue
+                    logs.extend(chunk)
+                    if len(logs) > 1024 * 1024:
+                        del logs[:-512 * 1024]
+                    output = logs.decode("utf-8", "replace")
+                    if "LOCASOS_VM_INSTALL_FAIL" in output or "LOCASOS_GUEST_HEALTH_FAILED" in output:
+                        raise RuntimeError("Guest reported failure: " + output[-6000:])
+                    if marker in output:
+                        found = True
+                        break
+                if found or proc.poll() is not None:
+                    break
+        output = logs.decode("utf-8", "replace")
+        print(output[-12000:], flush=True)
+        if not found:
+            raise RuntimeError("Guest serial marker not received: " + marker + "\\n" + output[-6000:])
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+        if proc.stdout is not None:
+            proc.stdout.close()
 
 def main():
     ap = argparse.ArgumentParser()
