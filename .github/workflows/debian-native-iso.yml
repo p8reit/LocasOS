@@ -70,6 +70,30 @@ jobs:
           set -e
           [[ "$result" -eq 124 ]] || { echo "UEFI VM exited unexpectedly ($result)" >&2; exit 1; }
           echo 'PASS: diskless UEFI VM smoke process alive (guest health still requires separate testing)'
+      - name: Publish short-lived development artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: locasos-debian-native-developer-iso
+          path: |
+            dist/debian/locasos-native-developer-amd64.iso
+            dist/debian/locasos-native-developer-amd64.iso.sha256
+            dist/debian/boot-report.txt
+          retention-days: 3
+  vm-install:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified development ISO
+        uses: actions/download-artifact@v4
+        with:
+          name: locasos-debian-native-developer-iso
+          path: dist/debian
+      - name: Install isolated VM testing dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf
+      - name: Check downloaded ISO digest
+        run: (cd dist/debian && sha256sum -c locasos-native-developer-amd64.iso.sha256)
       - name: Disposable QEMU disk installation and reboot verification
         shell: bash
         timeout-minutes: 25
@@ -90,12 +114,3 @@ jobs:
           python3 packaging/debian/installer/verify_native_vm_install.py \
             --iso dist/debian/locasos-native-developer-amd64.iso \
             --sha256 "$digest" --ovmf-code "$firmware" --ovmf-vars "$vars"
-      - name: Publish short-lived development artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: locasos-debian-native-developer-iso
-          path: |
-            dist/debian/locasos-native-developer-amd64.iso
-            dist/debian/locasos-native-developer-amd64.iso.sha256
-            dist/debian/boot-report.txt
-          retention-days: 3
