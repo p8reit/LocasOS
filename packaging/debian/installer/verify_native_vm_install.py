@@ -55,7 +55,7 @@ def run_until_marker(cmd, marker, timeout, monitor_path=None):
                         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as control:
                             control.settimeout(2)
                             control.connect(str(monitor_path))
-                            control.sendall(b"sendkey ret\\n")
+                            control.sendall(b"sendkey ret\n")
                         keypresses += 1
                         next_enter = time.monotonic() + 20
                     except OSError:
