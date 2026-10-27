@@ -51,6 +51,8 @@ jobs:
           sha256sum -c locasos-native-developer-amd64.iso.sha256
           xorriso -indev locasos-native-developer-amd64.iso -report_el_torito plain | tee boot-report.txt
           grep -Eiq 'EFI|platform id 0xef|UEFI' boot-report.txt
+          xorriso -osirrox on -indev locasos-native-developer-amd64.iso -extract /boot/grub/config.cfg /tmp/locasos-grub-live.cfg
+          grep -qx 'set timeout=3' /tmp/locasos-grub-live.cfg
       - name: UEFI QEMU live-boot smoke (diskless)
         shell: bash
         run: |
