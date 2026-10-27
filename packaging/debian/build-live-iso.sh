@@ -62,6 +62,13 @@ systemctl enable locasos-guest-health.service locasos-install-qemu-only.service
 # Path workers are not enabled by default until native lifecycle approval is complete.
 HOOK
 chmod 0755 "$workspace/config/hooks/live/"*.hook.chroot
+# Headless appliances must boot the default live entry without a keyboard.
+# Preserve Debian live-build's GRUB template; override only the menu timeout.
+grub_template="/usr/share/live/build/bootloaders/grub-pc/config.cfg"
+[[ -f "$grub_template" ]] || { echo "Missing live-build GRUB template: $grub_template" >&2; exit 1; }
+mkdir -p "$workspace/config/bootloaders/grub-pc"
+cp "$grub_template" "$workspace/config/bootloaders/grub-pc/config.cfg"
+printf '\nset timeout=3\n' >> "$workspace/config/bootloaders/grub-pc/config.cfg"
 cd "$workspace"
 lb config --mode debian --distribution trixie --architectures amd64 \
   --binary-images iso-hybrid --linux-flavours amd64 --linux-packages linux-image \
