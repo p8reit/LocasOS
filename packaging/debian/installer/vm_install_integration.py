@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 import select
+import socket
 import shutil
 import subprocess
 import sys
@@ -48,6 +49,10 @@ def qemu_args(iso, disk, code, var, from_iso):
 
 def await_markers(command, markers, deadline_seconds, log_file):
     print("Starting isolated QEMU test phase; waiting for " + ", ".join(markers), flush=True)
+    monitor = log_file.parent / ("qemu-" + log_file.stem + ".sock")
+    screenshot = log_file.with_suffix(".ppm")
+    command = list(command)
+    command[command.index("-monitor") + 1] = "unix:" + str(monitor) + ",server,nowait"
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                bufsize=0)
     pending = bytearray()
@@ -81,6 +86,17 @@ def await_markers(command, markers, deadline_seconds, log_file):
                     return True
             return False
     finally:
+        if not observed.issuperset(markers):
+            try:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(3)
+                    sock.connect(str(monitor))
+                    sock.recv(4096)
+                    sock.sendall(("screendump " + str(screenshot) + "\\n").encode())
+                    time.sleep(2)
+                print("Captured QEMU VGA diagnostic: " + str(screenshot), flush=True)
+            except (OSError, socket.timeout) as err:
+                print("VGA capture unavailable: " + str(err), flush=True)
         process.terminate()
         try:
             process.wait(timeout=8)
