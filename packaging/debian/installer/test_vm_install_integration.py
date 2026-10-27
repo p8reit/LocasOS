@@ -12,7 +12,7 @@ class IntegrationHarnessTests(unittest.TestCase):
         cmd = mod.qemu_args(Path("/tmp/live.iso"), Path("/tmp/only-disk.qcow2"), Path("/tmp/OVMF_CODE.fd"),Path("/tmp/OVMF_VARS.fd"),True)
         self.assertIn("name=opt/locasos/ephemeral,string=locasos-ephemeral-disk-v1",cmd)
         self.assertIn("type=1,manufacturer=QEMU,product=LocasOS-QEMU-InstallTest",cmd)
-        self.assertIn("file=/tmp/only-disk.qcow2,format=qcow2,cache=none",cmd)
+        self.assertTrue(any("file=/tmp/only-disk.qcow2,format=qcow2,cache=none" in arg for arg in cmd))
         self.assertIn("readonly=on", " ".join(cmd))
         self.assertNotIn("-hda",cmd)
         self.assertNotIn("-usb",cmd)
