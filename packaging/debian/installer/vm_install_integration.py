@@ -27,7 +27,7 @@ def ovmf_paths():
 
 def qemu_args(iso, disk, code, var, from_iso):
     args = [
-        "qemu-system-x86_64", "-machine", "q35,accel=tcg", "-cpu", "max",
+        "qemu-system-x86_64", "-machine", "q35,accel=kvm:tcg", "-cpu", "max",
         "-m", "3072", "-smp", "2", "-display", "none", "-serial", "stdio",
         "-monitor", "none", "-net", "none", "-no-reboot",
         "-smbios", "type=1,manufacturer=QEMU,product=LocasOS-QEMU-InstallTest",
