@@ -82,6 +82,7 @@ cd "$workspace"
 lb config --mode debian --distribution trixie --architectures amd64 \
   --binary-images iso-hybrid --linux-flavours amd64 --linux-packages linux-image \
   --debian-installer none --archive-areas "main" \
+  --bootappend-live "boot=live components console=tty0 console=ttyS0,115200n8 systemd.unit=multi-user.target" \
   --iso-application "LocasOS Developer Live" --iso-publisher "LocasOS Community" \
   --iso-volume "LOCASOS_DEV" --apt-recommends false
 lb build
