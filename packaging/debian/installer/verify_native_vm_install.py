@@ -8,15 +8,21 @@ import sys
 import tempfile
 from disposable_vm import checksum
 
-def vm_cmd(code, varsfile, disk, iso=None, enable_install=True):
+def vm_cmd(code, varsfile, disk, iso=None, enable_install=True, monitor_path=None):
     args = ["qemu-system-x86_64", "-nodefaults", "-machine", "q35,accel=tcg",
             "-m", "4096", "-smp", "2", "-vga", "std", "-display", "none", "-serial", "stdio",
             "-monitor", "none", "-no-reboot", "-net", "none",
+            "-device", "qemu-xhci", "-device", "usb-kbd",
             "-drive", "if=pflash,format=raw,readonly=on,file=" + str(code),
             "-drive", "if=pflash,format=raw,file=" + str(varsfile),
             "-device", "virtio-scsi-pci",
             "-drive", "if=none,id=scratch,format=qcow2,file=" + str(disk),
             "-device", "scsi-hd,drive=scratch,serial=locasos-scratch"]
+    if monitor_path is not None:
+        args += ["-monitor", "unix:" + str(monitor_path) + ",server,nowait"]
+        # Remove the inert monitor=none option, leaving the dedicated private socket.
+        index = args.index("-monitor")
+        del args[index:index + 2]
     if iso is not None:
         args += ["-drive", "if=none,id=cd,format=raw,readonly=on,media=cdrom,file=" + str(iso),
                  "-device", "scsi-cd,drive=cd",
@@ -27,10 +33,11 @@ def vm_cmd(code, varsfile, disk, iso=None, enable_install=True):
         args += ["-boot", "order=c"]
     return args
 
-def run_until_marker(cmd, marker, timeout):
+def run_until_marker(cmd, marker, timeout, monitor_path=None):
     # Stop as soon as the guest attests readiness; no need to wait out the full timeout.
     import os
     import selectors
+    import socket
     import time
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
     logs = bytearray()
@@ -39,8 +46,20 @@ def run_until_marker(cmd, marker, timeout):
         with selectors.DefaultSelector() as selector:
             selector.register(proc.stdout, selectors.EVENT_READ)
             deadline = time.monotonic() + timeout
+            next_enter = time.monotonic() + 15
+            keypresses = 0
             while time.monotonic() < deadline:
                 events = selector.select(timeout=min(1.0, max(0, deadline - time.monotonic())))
+                if monitor_path is not None and keypresses < 8 and time.monotonic() >= next_enter:
+                    try:
+                        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as control:
+                            control.settimeout(2)
+                            control.connect(str(monitor_path))
+                            control.sendall(b"sendkey ret\\n")
+                        keypresses += 1
+                        next_enter = time.monotonic() + 20
+                    except OSError:
+                        next_enter = time.monotonic() + 3
                 for key, _ in events:
                     chunk = os.read(key.fd, 65536)
                     if not chunk:
@@ -89,11 +108,16 @@ def main():
     with tempfile.TemporaryDirectory(prefix="locasos-e2e-qemu-") as tmp:
         disk = pathlib.Path(tmp) / "scratch.qcow2"
         varsfile = pathlib.Path(tmp) / "OVMF_VARS.fd"
+        monitor = pathlib.Path(tmp) / "monitor.sock"
         shutil.copyfile(args.ovmf_vars, varsfile)
         subprocess.run(["qemu-img", "create", "-f", "qcow2", str(disk), "64G"], check=True)
-        run_until_marker(vm_cmd(args.ovmf_code, varsfile, disk, iso, enable_install=False), "LOCASOS_GUEST_HEALTH_OK", args.live_timeout)
-        run_until_marker(vm_cmd(args.ovmf_code, varsfile, disk, iso), "LOCASOS_VM_INSTALL_COMPLETE", args.install_timeout)
-        run_until_marker(vm_cmd(args.ovmf_code, varsfile, disk), "LOCASOS_INSTALLED_BOOT_OK", args.boot_timeout)
+        def stage(iso_image, marker, seconds, enable_install=False):
+            monitor.unlink(missing_ok=True)
+            command = vm_cmd(args.ovmf_code, varsfile, disk, iso_image, enable_install=enable_install, monitor_path=monitor)
+            run_until_marker(command, marker, seconds, monitor_path=monitor)
+        stage(iso, "LOCASOS_GUEST_HEALTH_OK", args.live_timeout)
+        stage(iso, "LOCASOS_VM_INSTALL_COMPLETE", args.install_timeout, enable_install=True)
+        stage(None, "LOCASOS_INSTALLED_BOOT_OK", args.boot_timeout)
     print("PASS: Scratch-only Debian LocasOS install, EFI reboot and Core health")
 
 if __name__ == "__main__":
