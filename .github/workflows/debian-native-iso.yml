@@ -58,7 +58,7 @@ jobs:
           mkdir -p dist/debian/vm-logs
           python3 packaging/debian/installer/vm_install_integration.py \
             --iso dist/debian/locasos-native-developer-amd64.iso \
-            --live-timeout 600 --installed-timeout 300 \
+            --live-timeout 120 --installed-timeout 180 \
             --log-dir dist/debian/vm-logs
       - name: Publish VM diagnostics even on failure
         if: always()
