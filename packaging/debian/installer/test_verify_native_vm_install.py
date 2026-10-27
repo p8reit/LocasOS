@@ -19,6 +19,13 @@ class VMInstallSafetyTests(unittest.TestCase):
                         pathlib.Path("/tmp/scratch.qcow2"), pathlib.Path("/tmp/live.iso"), enable_install=False)
         self.assertFalse(any("fw_cfg" in x or "DISPOSABLE_VM_INSTALL" in x for x in args))
         self.assertTrue(any("readonly=on" in x and "live.iso" in x for x in args))
+    def test_private_monitor_and_virtual_keyboard(self):
+        args = m.vm_cmd(pathlib.Path("/tmp/code.fd"), pathlib.Path("/tmp/vars.fd"),
+                        pathlib.Path("/tmp/scratch.qcow2"), pathlib.Path("/tmp/live.iso"),
+                        monitor_path=pathlib.Path("/tmp/hmp.sock"))
+        self.assertIn("unix:/tmp/hmp.sock,server,nowait", args)
+        self.assertIn("usb-kbd", args)
+        self.assertNotIn("none", [args[i + 1] for i, value in enumerate(args[:-1]) if value == "-monitor"])
     def test_second_boot_has_no_install_marker_or_iso(self):
         args = m.vm_cmd(pathlib.Path("/tmp/code.fd"), pathlib.Path("/tmp/vars.fd"),
                         pathlib.Path("/tmp/scratch.qcow2"))
