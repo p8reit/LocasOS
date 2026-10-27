@@ -36,7 +36,7 @@ After=multi-user.target locas-core.service
 Wants=locas-core.service
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'systemctl is-active --quiet locas-core && printf "LOCASOS_LIVE_READY\\n" > /dev/ttyS0'
+ExecStart=/bin/sh -c 'systemctl is-active --quiet locas-core && curl -fsS --max-time 3 http://127.0.0.1:59420/healthz | grep -q 'locas-core' && printf "LOCASOS_LIVE_READY\\n" > /dev/ttyS0'
 [Install]
 WantedBy=multi-user.target
 SERVICE
