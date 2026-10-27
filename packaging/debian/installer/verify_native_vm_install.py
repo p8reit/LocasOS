@@ -10,7 +10,7 @@ from disposable_vm import checksum
 
 def vm_cmd(code, varsfile, disk, iso=None):
     args = ["qemu-system-x86_64", "-nodefaults", "-machine", "q35,accel=tcg",
-            "-m", "4096", "-smp", "2", "-display", "none", "-serial", "stdio",
+            "-m", "4096", "-smp", "2", "-vga", "std", "-display", "none", "-serial", "stdio",
             "-monitor", "none", "-no-reboot", "-net", "none",
             "-drive", "if=pflash,format=raw,readonly=on,file=" + str(code),
             "-drive", "if=pflash,format=raw,file=" + str(varsfile),
