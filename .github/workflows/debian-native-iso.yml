@@ -14,7 +14,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       LOCAS_UPDATE_PUBLIC_KEY_B64: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
     steps:
@@ -70,6 +70,26 @@ jobs:
           set -e
           [[ "$result" -eq 124 ]] || { echo "UEFI VM exited unexpectedly ($result)" >&2; exit 1; }
           echo 'PASS: diskless UEFI VM smoke process alive (guest health still requires separate testing)'
+      - name: Disposable QEMU disk installation and reboot verification
+        shell: bash
+        timeout-minutes: 25
+        run: |
+          set -Eeuo pipefail
+          firmware=
+          vars=
+          for f in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd; do
+            if [[ -f "$f" ]]; then firmware="$f"; break; fi
+          done
+          if [[ "$firmware" == *4M* ]]; then
+            vars=/usr/share/OVMF/OVMF_VARS_4M.fd
+          else
+            vars=/usr/share/OVMF/OVMF_VARS.fd
+          fi
+          [[ -f "$firmware" && -f "$vars" ]] || { echo 'Missing OVMF pair' >&2; exit 1; }
+          digest="$(cut -d ' ' -f 1 dist/debian/locasos-native-developer-amd64.iso.sha256)"
+          python3 packaging/debian/installer/verify_native_vm_install.py \
+            --iso dist/debian/locasos-native-developer-amd64.iso \
+            --sha256 "$digest" --ovmf-code "$firmware" --ovmf-vars "$vars"
       - name: Publish short-lived development artifact
         uses: actions/upload-artifact@v4
         with:
