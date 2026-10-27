@@ -58,7 +58,7 @@ def main():
         shutil.copyfile(args.ovmf_vars, varsfile)
         subprocess.run(["qemu-img", "create", "-f", "qcow2", str(disk), "64G"], check=True)
         run_until_marker(vm_cmd(args.ovmf_code, varsfile, disk, iso), "LOCASOS_VM_INSTALL_COMPLETE", args.install_timeout)
-        run_until_marker(vm_cmd(args.ovmf_code, varsfile, disk), "LOCASOS_GUEST_HEALTH_OK", args.boot_timeout)
+        run_until_marker(vm_cmd(args.ovmf_code, varsfile, disk), "LOCASOS_INSTALLED_BOOT_OK", args.boot_timeout)
     print("PASS: Scratch-only Debian LocasOS install, EFI reboot and Core health")
 
 if __name__ == "__main__":
