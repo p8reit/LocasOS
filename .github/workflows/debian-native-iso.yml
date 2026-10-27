@@ -39,7 +39,7 @@ jobs:
                 ca-certificates python3 golang-go live-build debootstrap xorriso \
                 squashfs-tools grub-efi-amd64-bin syslinux-common \
                 qemu-system-x86 ovmf
-              bash -n packaging/debian/build-live-iso.sh
+              bash -n packaging/debian/build-live-iso.sh packaging/debian/installer/install-ephemeral-guest.sh
               bash packaging/debian/build-live-iso.sh
             '
           sudo chown -R "$USER:$USER" dist build
