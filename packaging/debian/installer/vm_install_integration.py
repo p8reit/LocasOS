@@ -92,7 +92,7 @@ def await_markers(command, markers, deadline_seconds, log_file):
                     sock.settimeout(3)
                     sock.connect(str(monitor))
                     sock.recv(4096)
-                    sock.sendall(("screendump " + str(screenshot) + "\\n").encode())
+                    sock.sendall(("screendump " + str(screenshot) + "\n").encode())
                     time.sleep(2)
                 print("Captured QEMU VGA diagnostic: " + str(screenshot), flush=True)
             except (OSError, socket.timeout) as err:
