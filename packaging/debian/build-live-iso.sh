@@ -17,6 +17,7 @@ install -m 0644 dist/native/locasos-native-payload-amd64.tar.sha256 "$workspace/
 # VM-only developer readiness marker and disposable QEMU install machinery.
 mkdir -p "$workspace/config/includes.chroot/usr/local/libexec" "$workspace/config/includes.chroot/etc/systemd/system"
 install -m 0755 packaging/debian/installer/guest-health.sh "$workspace/config/includes.chroot/usr/local/libexec/locasos-guest-health.sh"
+install -m 0755 packaging/debian/installer/guest_readiness.py "$workspace/config/includes.chroot/usr/local/libexec/locasos-guest-readiness"
 install -m 0755 packaging/debian/installer/install-qemu-only.sh "$workspace/config/includes.chroot/usr/local/libexec/locasos-install-qemu-only.sh"
 install -m 0644 packaging/debian/installer/locasos-guest-health.service "$workspace/config/includes.chroot/etc/systemd/system/"
 install -m 0644 packaging/debian/installer/locasos-install-qemu-only.service "$workspace/config/includes.chroot/etc/systemd/system/"
