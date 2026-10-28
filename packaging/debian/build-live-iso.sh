@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # LocasOS Debian developer ISO: opt-in QEMU scratch installer only. No physical disk installer.
 set -Eeuo pipefail
-umask 027
+umask 022 # ordinary executable/rootfs directories must be traversable by system users
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo"
 for tool in lb go sha256sum; do command -v "$tool" >/dev/null || { echo "Missing $tool" >&2; exit 1; }; done
