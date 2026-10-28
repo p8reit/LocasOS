@@ -19,6 +19,7 @@ mkdir -p "$workspace/config/includes.chroot/usr/local/libexec" "$workspace/confi
 install -m 0755 packaging/debian/installer/guest-health.sh "$workspace/config/includes.chroot/usr/local/libexec/locasos-guest-health.sh"
 install -m 0755 packaging/debian/installer/guest_readiness.py "$workspace/config/includes.chroot/usr/local/libexec/locasos-guest-readiness"
 install -m 0755 packaging/debian/installer/install-qemu-only.sh "$workspace/config/includes.chroot/usr/local/libexec/locasos-install-qemu-only.sh"
+install -m 0755 packaging/debian/installer/vm_only_target.py "$workspace/config/includes.chroot/usr/local/libexec/locasos-vm-target-check"
 install -m 0644 packaging/debian/installer/locasos-guest-health.service "$workspace/config/includes.chroot/etc/systemd/system/"
 install -m 0644 packaging/debian/installer/locasos-install-qemu-only.service "$workspace/config/includes.chroot/etc/systemd/system/"
 # Reuse exactly the same baseline system dependencies as WSL.
