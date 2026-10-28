@@ -26,11 +26,15 @@ def healthy_payload(raw):
 
 def systemd_ready():
     try:
-        return subprocess.run(
-            ["systemctl", "is-active", "--quiet", "multi-user.target", *SERVICES],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            timeout=3, check=False,
-        ).returncode == 0
+        for unit in ("multi-user.target", *SERVICES):
+            state = subprocess.run(
+                ["systemctl", "is-active", "--quiet", unit],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=3, check=False,
+            )
+            if state.returncode != 0:
+                return False
+        return True
     except (OSError, subprocess.TimeoutExpired):
         return False
 
