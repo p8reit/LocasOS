@@ -59,6 +59,11 @@ def verify_vm_target(lsblk, *, vendor, firmware_marker):
     for other in devices:
         if other is disk:
             continue
-        if other.get("children") or _mounted(other) or other.get("fstype"):
-            raise UnsafeTarget("unexpected occupied auxiliary block device")
+        if other.get("type") == "rom":
+            # The Debian Live ISO is mounted during installation. Optical media is
+            # expected and is never considered an install target.
+            if other.get("children"):
+                raise UnsafeTarget("unexpected optical device children")
+            continue
+        raise UnsafeTarget("unexpected auxiliary block device")
     return VMTarget(path, EXPECTED_SERIAL, size)
