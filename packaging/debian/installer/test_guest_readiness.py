@@ -29,11 +29,12 @@ class GuestReadinessTests(unittest.TestCase):
         with mock.patch.object(m.subprocess, "run") as run:
             run.return_value.returncode = 0
             self.assertTrue(m.systemd_ready())
-            self.assertIn("multi-user.target", run.call_args.args[0])
-            self.assertIn("locas-agent.service", run.call_args.args[0])
-            self.assertIn("locas-core.service", run.call_args.args[0])
-            run.return_value.returncode = 1
+            seen = [call.args[0][-1] for call in run.call_args_list]
+            self.assertEqual(seen, ["multi-user.target", "locas-agent.service", "locas-core.service"])
+            run.reset_mock()
+            run.side_effect = [mock.Mock(returncode=0), mock.Mock(returncode=1)]
             self.assertFalse(m.systemd_ready())
+            self.assertEqual(run.call_count, 2)
 
     def test_guest_health_never_accepts_unrelated_status(self):
         self.assertFalse(m.healthy_payload(json.dumps({"status": "ok", "component": "qemu"}).encode()))
