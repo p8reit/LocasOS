@@ -21,7 +21,11 @@ bytes="$(blockdev --getsize64 "$disk")"
 [[ -z $(lsblk -nr -o FSTYPE "$disk" | tr -d '[:space:]') ]] || fail "existing filesystem"
 [[ -z $(lsblk -nr -o MOUNTPOINTS "$disk" | tr -d '[:space:]') ]] || fail "mounted disk"
 [[ $(lsblk -dn -o MODEL "$disk" | xargs) == 'QEMU HARDDISK' ]] || fail "unexpected model"
-for binary in sgdisk mkfs.vfat mkfs.ext4 rsync grub-install blkid; do command -v "$binary" >/dev/null || fail "missing $binary"; done
+for binary in sgdisk mkfs.vfat mkfs.ext4 rsync grub-install blkid python3; do command -v "$binary" >/dev/null || fail "missing $binary"; done
+# Reaffirm exact DMI, fw_cfg, single QEMU disk serial and blank topology
+# immediately before the first destructive command.
+verified="$(python3 /usr/local/libexec/locasos-vm-target-check)" || fail "VM-only runtime device preflight refused"
+[[ "$verified" == "$disk" ]] || fail "VM target changed after preflight"
 mark 'STARTED'
 sgdisk --clear "$disk"
 sgdisk --new=1:1MiB:+1GiB --typecode=1:ef00 --change-name=1:EFI "$disk"
@@ -57,6 +61,10 @@ UUID=$uuid / ext4 defaults 0 1
 UUID=$efi_uuid /boot/efi vfat umask=0077 0 2
 UUID=$data_uuid /var/lib/locas ext4 defaults 0 2
 EOF
+# The installed-disk readiness service checks this data-volume sentinel,
+# proving the independently mounted persistent partition survived reboot.
+mount "$data" /mnt/locasos-target/var/lib/locas
+printf 'locasos-vm-install-v1\n' > /mnt/locasos-target/var/lib/locas/.locasos-vm-install-sentinel
 for d in dev proc sys run; do mount --bind "/$d" "/mnt/locasos-target/$d"; done
 # UEFI removable path avoids modifying host EFI variables, even in QEMU.
 chroot /mnt/locasos-target grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=LocasOS --removable --no-nvram --recheck || fail "grub-install failed"
