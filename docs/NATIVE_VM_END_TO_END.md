@@ -33,3 +33,7 @@ python3 packaging/debian/installer/verify_native_vm_install.py \
 ```
 
 QEMU runs with TCG (no KVM access required), no network and a newly created temporary qcow2. If any install, boot, or health assertion fails, the test exits unsuccessfully and deletes the temporary image.
+
+## Integration experiment — October 28, 2026
+
+This **unmerged** integration branch now trials three independent workstream components: developer-only guest readiness diagnostics from #110; exact QEMU virtual target preflight and a persistent-data sentinel from #111; and stage-local serial evidence parsing from #112. These are experimental changes to find the actual D-Bus/Agent/Core boot fault, not proof that the native installation works. The live-stage timeout is extended for GitHub TCG performance; acceptance criteria remain unchanged. The physical disk installer is still unavailable.
