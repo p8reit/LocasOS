@@ -16,7 +16,7 @@ def fixture():
         "model": "QEMU HARDDISK", "serial": "locasos-scratch",
         "size": 64 * 1024 ** 3, "ro": 0, "rm": 0,
         "fstype": None, "mountpoints": [None], "children": [],
-    }, {"name": "sr0", "type": "rom", "mountpoints": [None]}]}
+    }, {"name": "sr0", "type": "rom", "fstype": "iso9660", "mountpoints": ["/run/live/medium"]}]}
 
 
 def check(d, vendor="QEMU", marker="LOCASOS_DISPOSABLE_VM_INSTALL_V1"):
@@ -28,6 +28,9 @@ class VMTargetTests(unittest.TestCase):
         v = check(fixture())
         self.assertEqual(v.path, "/dev/sda")
         self.assertEqual(v.serial, "locasos-scratch")
+
+    def test_mounted_optical_iso_is_allowed(self):
+        self.assertEqual(check(fixture()).path, "/dev/sda")
 
     def test_missing_or_fake_vm_opt_in_rejected(self):
         for name, marker in [("QEMU Corporation", "LOCASOS_DISPOSABLE_VM_INSTALL_V1"),
