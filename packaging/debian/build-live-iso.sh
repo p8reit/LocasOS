@@ -61,10 +61,17 @@ systemctl enable locas-firstboot.service locas-agent.service locas-core.service 
 # Path workers are not enabled by default until native lifecycle approval is complete.
 HOOK
 chmod 0755 "$workspace/config/hooks/live/"*.hook.chroot
+# Headless UEFI boot: do not require interactive GRUB key presses.
+grub_template="/usr/share/live/build/bootloaders/grub-pc/config.cfg"
+[[ -f "$grub_template" ]] || { echo "Missing Debian live-build GRUB template: $grub_template" >&2; exit 1; }
+mkdir -p "$workspace/config/bootloaders/grub-pc"
+cp "$grub_template" "$workspace/config/bootloaders/grub-pc/config.cfg"
+printf '\nset timeout=3\n' >> "$workspace/config/bootloaders/grub-pc/config.cfg"
 cd "$workspace"
 lb config --mode debian --distribution trixie --architectures amd64 \
   --binary-images iso-hybrid --linux-flavours amd64 --linux-packages linux-image \
   --debian-installer none --archive-areas "main" \
+  --bootappend-live "boot=live components console=ttyS0,115200" \
   --iso-application "LocasOS Developer Live" --iso-publisher "LocasOS Community" \
   --iso-volume "LOCASOS_DEV" --apt-recommends false
 lb build
