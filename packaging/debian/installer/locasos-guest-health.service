@@ -4,7 +4,7 @@ Wants=locas-agent.service locas-core.service
 After=locas-agent.service locas-core.service
 [Service]
 Type=oneshot
-ExecStart=/usr/local/libexec/locasos-guest-readiness
+ExecStart=/usr/local/libexec/locasos-guest-readiness --timeout 90
 TimeoutStartSec=300
 StandardOutput=journal+console
 StandardError=journal+console
