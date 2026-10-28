@@ -14,6 +14,10 @@ mkdir -p "$workspace/config/package-lists" "$workspace/config/includes.chroot/us
 # Source-build payload remains explicitly VM-only and is NOT executed by the live image.
 install -m 0644 dist/native/locasos-native-payload-amd64.tar "$workspace/config/includes.chroot/usr/local/share/locasos/"
 install -m 0644 dist/native/locasos-native-payload-amd64.tar.sha256 "$workspace/config/includes.chroot/usr/local/share/locasos/"
+# Developer-only guest evidence signal (does not enable disk installation).
+mkdir -p "$workspace/config/includes.chroot/usr/local/libexec" "$workspace/config/includes.chroot/etc/systemd/system"
+install -m 0755 packaging/debian/installer/guest_readiness.py "$workspace/config/includes.chroot/usr/local/libexec/locasos-guest-readiness"
+install -m 0644 packaging/debian/installer/locasos-guest-readiness.service "$workspace/config/includes.chroot/etc/systemd/system/"
 # Reuse exactly the same baseline system dependencies as WSL.
 grep -Ev '^[[:space:]]*(#|$)' packaging/common/base-packages.txt > "$workspace/config/package-lists/locasos.list.chroot"
 cat >> "$workspace/config/package-lists/locasos.list.chroot" <<'LIST'
@@ -41,7 +45,7 @@ for user in locas-core locas-agent locas-ollama; do
   fi
 done
 tar -C / -xf /usr/local/share/locasos/locasos-native-payload-amd64.tar --no-same-owner
-systemctl enable locas-firstboot.service locas-agent.service locas-core.service
+systemctl enable locas-firstboot.service locas-agent.service locas-core.service locasos-guest-readiness.service
 # Path workers are not enabled by default until native lifecycle approval is complete.
 HOOK
 chmod 0755 "$workspace/config/hooks/live/"*.hook.chroot

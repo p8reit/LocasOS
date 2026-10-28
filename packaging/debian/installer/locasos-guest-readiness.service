@@ -1,0 +1,12 @@
+[Unit]
+Description=LocasOS developer VM boot readiness and failure diagnostics
+Wants=locas-agent.service locas-core.service
+After=locas-agent.service locas-core.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/locasos-guest-readiness
+TimeoutStartSec=300
+StandardOutput=journal+console
+StandardError=journal+console
+[Install]
+WantedBy=multi-user.target
