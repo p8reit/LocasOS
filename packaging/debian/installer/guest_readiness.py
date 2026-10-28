@@ -92,7 +92,7 @@ def main():
         deadline = time.monotonic() + args.timeout
         while time.monotonic() < deadline:
             if systemd_ready() and api_ready():
-                serial.write(MARKER + "\n")
+                serial.write("\n" + MARKER + "\n")
                 if pathlib.Path("/etc/locasos-installed-vm-test").is_file():
                     sentinel = pathlib.Path("/var/lib/locas/.locasos-vm-install-sentinel")
                     try:
@@ -100,13 +100,13 @@ def main():
                     except OSError:
                         persisted = False
                     if persisted:
-                        serial.write("LOCASOS_INSTALLED_BOOT_OK\n")
+                        serial.write("\nLOCASOS_INSTALLED_BOOT_OK\n")
                     else:
-                        serial.write("LOCASOS_INSTALLED_DATA_FAILED\n")
+                        serial.write("\nLOCASOS_INSTALLED_DATA_FAILED\n")
                         return 1
                 return 0
             time.sleep(2)
-        serial.write(FAIL_MARKER + "\n")
+        serial.write("\n" + FAIL_MARKER + "\n")
         diag(serial)
     return 1
 

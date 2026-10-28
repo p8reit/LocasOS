@@ -39,11 +39,19 @@ def verify(path: str) -> None:
             if member.isdir():
                 if name not in ALLOWED_DIRS:
                     raise ValueError(f"unexpected directory: {name}")
+                if member.mode & 0o005 != 0o005:
+                    raise ValueError(f"directory inaccessible to service user: {name}")
+                if member.mode & 0o022:
+                    raise ValueError(f"writable payload directory: {name}")
             elif member.isfile():
                 if name not in ALLOWED_FILES or name in found:
                     raise ValueError(f"unexpected or duplicate file: {name}")
                 if member.mode & 0o6000:
                     raise ValueError(f"setuid/setgid forbidden: {name}")
+                if member.mode & 0o022:
+                    raise ValueError(f"writable payload file: {name}")
+                if name.startswith(("opt/locas/bin/", "usr/local/sbin/")) and member.mode & 0o005 != 0o005:
+                    raise ValueError(f"non-executable payload program: {name}")
                 found.add(name)
             else:
                 raise ValueError(f"link or special file forbidden: {name}")

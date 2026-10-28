@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# LocasOS Debian-based developer live ISO. No disk installer or autoinstall.
+# LocasOS Debian developer ISO: opt-in QEMU scratch installer only. No physical disk installer.
 set -Eeuo pipefail
-umask 027
+umask 022 # ordinary executable/rootfs directories must be traversable by system users
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo"
 for tool in lb go sha256sum; do command -v "$tool" >/dev/null || { echo "Missing $tool" >&2; exit 1; }; done
@@ -18,11 +18,23 @@ install -m 0644 dist/native/locasos-native-payload-amd64.tar.sha256 "$workspace/
 mkdir -p "$workspace/config/includes.chroot/usr/local/libexec" "$workspace/config/includes.chroot/etc/systemd/system"
 install -m 0755 packaging/debian/installer/guest_readiness.py "$workspace/config/includes.chroot/usr/local/libexec/locasos-guest-readiness"
 install -m 0644 packaging/debian/installer/locasos-guest-readiness.service "$workspace/config/includes.chroot/etc/systemd/system/"
+# Test-only installation entry point: inert without a dedicated QEMU fw_cfg marker.
+install -m 0755 packaging/debian/installer/install-qemu-only.sh "$workspace/config/includes.chroot/usr/local/libexec/locasos-install-qemu-only.sh"
+install -m 0755 packaging/debian/installer/vm_only_target.py "$workspace/config/includes.chroot/usr/local/libexec/locasos-vm-target-check"
+install -m 0644 packaging/debian/installer/locasos-install-qemu-only.service "$workspace/config/includes.chroot/etc/systemd/system/"
 # Reuse exactly the same baseline system dependencies as WSL.
 grep -Ev '^[[:space:]]*(#|$)' packaging/common/base-packages.txt > "$workspace/config/package-lists/locasos.list.chroot"
 cat >> "$workspace/config/package-lists/locasos.list.chroot" <<'LIST'
 openssh-client
 pciutils
+rsync
+gdisk
+parted
+dosfstools
+e2fsprogs
+grub-efi-amd64-bin
+grub2-common
+initramfs-tools
 LIST
 # Debian Live defaults to a live session, not automatic host disk installation.
 cat > "$workspace/config/hooks/live/010-locasos-brand.hook.chroot" <<'HOOK'
@@ -45,14 +57,29 @@ for user in locas-core locas-agent locas-ollama; do
   fi
 done
 tar -C / -xf /usr/local/share/locasos/locasos-native-payload-amd64.tar --no-same-owner
-systemctl enable locas-firstboot.service locas-agent.service locas-core.service locasos-guest-readiness.service
+# Fail image creation if ordinary service identities cannot traverse executable
+# paths. This would otherwise surface only as systemd status=203/EXEC at boot.
+for entry in 'locas-agent /opt/locas/bin/locas-agent' \
+             'locas-core /opt/locas/bin/locas-core' \
+             'locas-agent /usr/bin/dbus-daemon'; do
+  set -- $entry
+  runuser -u "$1" -- test -x "$2" || { echo "Native live executable inaccessible: $2 for $1" >&2; exit 1; }
+done
+systemctl enable locas-firstboot.service locas-agent.service locas-core.service locasos-guest-readiness.service locasos-install-qemu-only.service
 # Path workers are not enabled by default until native lifecycle approval is complete.
 HOOK
 chmod 0755 "$workspace/config/hooks/live/"*.hook.chroot
+# Headless UEFI boot: do not require interactive GRUB key presses.
+grub_template="/usr/share/live/build/bootloaders/grub-pc/config.cfg"
+[[ -f "$grub_template" ]] || { echo "Missing Debian live-build GRUB template: $grub_template" >&2; exit 1; }
+mkdir -p "$workspace/config/bootloaders/grub-pc"
+cp "$grub_template" "$workspace/config/bootloaders/grub-pc/config.cfg"
+printf '\nset timeout=3\n' >> "$workspace/config/bootloaders/grub-pc/config.cfg"
 cd "$workspace"
 lb config --mode debian --distribution trixie --architectures amd64 \
   --binary-images iso-hybrid --linux-flavours amd64 --linux-packages linux-image \
   --debian-installer none --archive-areas "main" \
+  --bootappend-live "boot=live components console=ttyS0,115200" \
   --iso-application "LocasOS Developer Live" --iso-publisher "LocasOS Community" \
   --iso-volume "LOCASOS_DEV" --apt-recommends false
 lb build
@@ -61,4 +88,4 @@ image="$(find . -maxdepth 1 -type f -name '*.iso' -print -quit)"
 [[ -n "$image" ]] || { echo 'Live-build did not produce an ISO' >&2; exit 1; }
 install -m 0644 "$image" "$repo/dist/debian/locasos-native-developer-amd64.iso"
 (cd "$repo/dist/debian" && sha256sum locasos-native-developer-amd64.iso > locasos-native-developer-amd64.iso.sha256)
-echo 'Built Debian-based LocasOS developer live ISO; NOT an OS installer or stable release.'
+echo 'Built developer-only LocasOS ISO with QEMU scratch-disk opt-in; NOT a physical installer or stable release.'

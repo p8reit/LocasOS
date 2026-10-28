@@ -1,0 +1,12 @@
+[Unit]
+Description=LocasOS disposable QEMU VM disk installer
+ConditionPathExists=/sys/firmware/qemu_fw_cfg/by_name/opt/locasos/dev-install/raw
+After=systemd-udev-settle.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/locasos-install-qemu-only.sh
+TimeoutStartSec=900
+StandardOutput=journal+console
+StandardError=journal+console
+[Install]
+WantedBy=multi-user.target
