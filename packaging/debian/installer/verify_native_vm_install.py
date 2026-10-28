@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 from disposable_vm import checksum
+from guest_serial import StageEvidence, SerialFailure
 
 def vm_cmd(code, varsfile, disk, iso=None, enable_install=True, monitor_path=None):
     args = ["qemu-system-x86_64", "-nodefaults", "-machine", "q35,accel=tcg",
@@ -33,15 +34,15 @@ def vm_cmd(code, varsfile, disk, iso=None, enable_install=True, monitor_path=Non
         args += ["-boot", "order=c"]
     return args
 
-def run_until_marker(cmd, marker, timeout, monitor_path=None):
-    # Stop as soon as the guest attests readiness; no need to wait out the full timeout.
+def run_until_marker(cmd, stage, timeout, monitor_path=None, log_path=None):
+    """Require fresh, exact guest serial evidence from this one VM process."""
     import os
     import selectors
     import socket
     import time
+    evidence = StageEvidence(stage)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
     logs = bytearray()
-    found = False
     try:
         with selectors.DefaultSelector() as selector:
             selector.register(proc.stdout, selectors.EVENT_READ)
@@ -66,20 +67,13 @@ def run_until_marker(cmd, marker, timeout, monitor_path=None):
                         selector.unregister(key.fileobj)
                         continue
                     logs.extend(chunk)
-                    if len(logs) > 1024 * 1024:
-                        del logs[:-512 * 1024]
-                    output = logs.decode("utf-8", "replace")
-                    if "LOCASOS_VM_INSTALL_FAIL" in output or "LOCASOS_GUEST_HEALTH_FAILED" in output:
-                        raise RuntimeError("Guest reported failure: " + output[-6000:])
-                    if marker in output:
-                        found = True
-                        break
-                if found or proc.poll() is not None:
+                    if len(logs) > 4 * 1024 * 1024:
+                        del logs[:1024 * 1024]
+                    evidence.feed(chunk)
+                if evidence.accepted or proc.poll() is not None:
                     break
-        output = logs.decode("utf-8", "replace")
-        print(output[-12000:], flush=True)
-        if not found:
-            raise RuntimeError("Guest serial marker not received: " + marker + "\\n" + output[-6000:])
+        if not evidence.accepted:
+            raise RuntimeError("Guest marker not received for stage: " + stage)
     finally:
         if proc.poll() is None:
             proc.terminate()
@@ -90,6 +84,10 @@ def run_until_marker(cmd, marker, timeout, monitor_path=None):
                 proc.wait()
         if proc.stdout is not None:
             proc.stdout.close()
+        if log_path is not None:
+            pathlib.Path(log_path).write_bytes(logs)
+        print(logs[-12000:].decode("utf-8", "replace"), flush=True)
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -100,6 +98,7 @@ def main():
     ap.add_argument("--live-timeout", type=int, default=300)
     ap.add_argument("--install-timeout", type=int, default=900)
     ap.add_argument("--boot-timeout", type=int, default=300)
+    ap.add_argument("--log-dir", type=pathlib.Path)
     args = ap.parse_args()
     for tool in ("qemu-img", "qemu-system-x86_64"):
         if not shutil.which(tool): ap.error(tool + " missing")
@@ -111,14 +110,17 @@ def main():
         monitor = pathlib.Path(tmp) / "monitor.sock"
         shutil.copyfile(args.ovmf_vars, varsfile)
         subprocess.run(["qemu-img", "create", "-f", "qcow2", str(disk), "64G"], check=True)
-        def stage(iso_image, marker, seconds, enable_install=False):
+        if args.log_dir:
+            args.log_dir.mkdir(parents=True, exist_ok=True)
+        def stage(iso_image, name, seconds, enable_install=False):
             monitor.unlink(missing_ok=True)
             command = vm_cmd(args.ovmf_code, varsfile, disk, iso_image, enable_install=enable_install, monitor_path=monitor)
-            run_until_marker(command, marker, seconds, monitor_path=monitor)
-        stage(iso, "LOCASOS_GUEST_HEALTH_OK", args.live_timeout)
-        stage(iso, "LOCASOS_VM_INSTALL_COMPLETE", args.install_timeout, enable_install=True)
-        stage(None, "LOCASOS_INSTALLED_BOOT_OK", args.boot_timeout)
-    print("PASS: Scratch-only Debian LocasOS install, EFI reboot and Core health")
+            log = args.log_dir / (name + ".serial.log") if args.log_dir else None
+            run_until_marker(command, name, seconds, monitor_path=monitor, log_path=log)
+        stage(iso, "live", args.live_timeout)
+        stage(iso, "install", args.install_timeout, enable_install=True)
+        stage(None, "installed", args.boot_timeout)
+    print("PASS: Exact serial evidence for QEMU live, scratch install and disk-only UEFI boot")
 
 if __name__ == "__main__":
     try: main()
