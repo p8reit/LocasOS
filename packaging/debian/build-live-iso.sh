@@ -57,6 +57,14 @@ for user in locas-core locas-agent locas-ollama; do
   fi
 done
 tar -C / -xf /usr/local/share/locasos/locasos-native-payload-amd64.tar --no-same-owner
+# Fail image creation if ordinary service identities cannot traverse executable
+# paths. This would otherwise surface only as systemd status=203/EXEC at boot.
+for entry in 'locas-agent /opt/locas/bin/locas-agent' \
+             'locas-core /opt/locas/bin/locas-core' \
+             'locas-agent /usr/bin/dbus-daemon'; do
+  set -- $entry
+  runuser -u "$1" -- test -x "$2" || { echo "Native live executable inaccessible: $2 for $1" >&2; exit 1; }
+done
 systemctl enable locas-firstboot.service locas-agent.service locas-core.service locasos-guest-readiness.service locasos-install-qemu-only.service
 # Path workers are not enabled by default until native lifecycle approval is complete.
 HOOK
