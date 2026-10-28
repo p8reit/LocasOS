@@ -14,7 +14,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       LOCAS_UPDATE_PUBLIC_KEY_B64: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
     steps:
@@ -44,13 +44,15 @@ jobs:
             '
           sudo chown -R "$USER:$USER" dist build
       - name: Install VM verification tools on runner
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xorriso qemu-system-x86 ovmf
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xorriso qemu-system-x86 qemu-utils ovmf
       - name: Verify ISO identity and EFI metadata
         run: |
           cd dist/debian
           sha256sum -c locasos-native-developer-amd64.iso.sha256
           xorriso -indev locasos-native-developer-amd64.iso -report_el_torito plain | tee boot-report.txt
           grep -Eiq 'EFI|platform id 0xef|UEFI' boot-report.txt
+          xorriso -osirrox on -indev locasos-native-developer-amd64.iso -extract /boot/grub/config.cfg /tmp/locasos-grub-live.cfg
+          grep -qx 'set timeout=3' /tmp/locasos-grub-live.cfg
       - name: UEFI QEMU live-boot smoke (diskless)
         shell: bash
         run: |
@@ -79,3 +81,38 @@ jobs:
             dist/debian/locasos-native-developer-amd64.iso.sha256
             dist/debian/boot-report.txt
           retention-days: 3
+  vm-install:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified development ISO
+        uses: actions/download-artifact@v4
+        with:
+          name: locasos-debian-native-developer-iso
+          path: dist/debian
+      - name: Install isolated VM testing dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf
+      - name: Check downloaded ISO digest
+        run: (cd dist/debian && sha256sum -c locasos-native-developer-amd64.iso.sha256)
+      - name: Disposable QEMU disk installation and reboot verification
+        shell: bash
+        timeout-minutes: 25
+        run: |
+          set -Eeuo pipefail
+          firmware=
+          vars=
+          for f in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd; do
+            if [[ -f "$f" ]]; then firmware="$f"; break; fi
+          done
+          if [[ "$firmware" == *4M* ]]; then
+            vars=/usr/share/OVMF/OVMF_VARS_4M.fd
+          else
+            vars=/usr/share/OVMF/OVMF_VARS.fd
+          fi
+          [[ -f "$firmware" && -f "$vars" ]] || { echo 'Missing OVMF pair' >&2; exit 1; }
+          digest="$(cut -d ' ' -f 1 dist/debian/locasos-native-developer-amd64.iso.sha256)"
+          python3 packaging/debian/installer/verify_native_vm_install.py \
+            --iso dist/debian/locasos-native-developer-amd64.iso \
+            --sha256 "$digest" --ovmf-code "$firmware" --ovmf-vars "$vars"
