@@ -95,7 +95,7 @@ def main():
     ap.add_argument("--sha256", required=True)
     ap.add_argument("--ovmf-code", type=pathlib.Path, required=True)
     ap.add_argument("--ovmf-vars", type=pathlib.Path, required=True)
-    ap.add_argument("--live-timeout", type=int, default=300)
+    ap.add_argument("--live-timeout", type=int, default=480)
     ap.add_argument("--install-timeout", type=int, default=900)
     ap.add_argument("--boot-timeout", type=int, default=300)
     ap.add_argument("--log-dir", type=pathlib.Path)
