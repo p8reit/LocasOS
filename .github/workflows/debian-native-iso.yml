@@ -39,37 +39,35 @@ jobs:
                 ca-certificates python3 golang-go live-build debootstrap xorriso \
                 squashfs-tools grub-efi-amd64-bin syslinux-common \
                 qemu-system-x86 ovmf
-              bash -n packaging/debian/build-live-iso.sh
+              bash -n packaging/debian/build-live-iso.sh packaging/debian/installer/install-ephemeral-guest.sh
               bash packaging/debian/build-live-iso.sh
             '
           sudo chown -R "$USER:$USER" dist build
       - name: Install VM verification tools on runner
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xorriso qemu-system-x86 ovmf
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xorriso qemu-system-x86 qemu-utils ovmf
       - name: Verify ISO identity and EFI metadata
         run: |
           cd dist/debian
           sha256sum -c locasos-native-developer-amd64.iso.sha256
           xorriso -indev locasos-native-developer-amd64.iso -report_el_torito plain | tee boot-report.txt
           grep -Eiq 'EFI|platform id 0xef|UEFI' boot-report.txt
-      - name: UEFI QEMU live-boot smoke (diskless)
+      - name: UEFI live and installed-disk QEMU acceptance
         shell: bash
         run: |
           set -Eeuo pipefail
-          firmware=
-          for option in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd; do
-            if [[ -f "$option" ]]; then firmware="$option"; break; fi
-          done
-          [[ -n "$firmware" ]] || { echo 'Missing OVMF firmware' >&2; exit 1; }
-          set +e
-          timeout 35 qemu-system-x86_64 \
-            -machine q35,accel=tcg -m 2048 -smp 2 \
-            -drive if=pflash,format=raw,readonly=on,file="$firmware" \
-            -cdrom dist/debian/locasos-native-developer-amd64.iso \
-            -boot order=d -nographic -serial none -monitor none -no-reboot
-          result=$?
-          set -e
-          [[ "$result" -eq 124 ]] || { echo "UEFI VM exited unexpectedly ($result)" >&2; exit 1; }
-          echo 'PASS: diskless UEFI VM smoke process alive (guest health still requires separate testing)'
+          mkdir -p dist/debian/vm-logs
+          python3 packaging/debian/installer/vm_install_integration.py \
+            --iso dist/debian/locasos-native-developer-amd64.iso \
+            --live-timeout 120 --installed-timeout 180 \
+            --log-dir dist/debian/vm-logs
+      - name: Publish VM diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: locasos-native-vm-install-logs
+          path: dist/debian/vm-logs/
+          if-no-files-found: ignore
+          retention-days: 5
       - name: Publish short-lived development artifact
         uses: actions/upload-artifact@v4
         with:
