@@ -5,6 +5,10 @@ This is validation, not permission to format a disk. Re-check immediately before
 any write. DMI, fw_cfg and disk identity checks are also required in the guest.
 """
 from dataclasses import dataclass
+import json
+from pathlib import Path
+import subprocess
+import sys
 
 EXPECTED_SERIAL = "locasos-scratch"
 MIN_BYTES = 64 * (1024 ** 3)
@@ -54,10 +58,14 @@ def verify_vm_target(lsblk, *, vendor, firmware_marker):
         raise UnsafeTarget("disk must be writable and non-removable")
     if disk.get("fstype") or _mounted(disk) or disk.get("children"):
         raise UnsafeTarget("disk is not empty, has children or is mounted")
-    if any(x.get("type") not in ("disk", "rom") for x in devices):
+    if any(x.get("type") not in ("disk", "rom", "loop") for x in devices):
         raise UnsafeTarget("unexpected block device topology")
     for other in devices:
         if other is disk:
+            continue
+        if other.get("type") == "loop":
+            if other.get("ro") not in (1, "1", True) or not str(other.get("path", "")).startswith("/dev/loop"):
+                raise UnsafeTarget("unexpected writable or non-loop device")
             continue
         if other.get("type") == "rom":
             # The Debian Live ISO is mounted during installation. Optical media is
@@ -67,3 +75,22 @@ def verify_vm_target(lsblk, *, vendor, firmware_marker):
             continue
         raise UnsafeTarget("unexpected auxiliary block device")
     return VMTarget(path, EXPECTED_SERIAL, size)
+
+
+def runtime_verify():
+    """Read-only check inside isolated QEMU guest, just before device mutation."""
+    vendor = Path("/sys/class/dmi/id/sys_vendor").read_text().strip()
+    marker = Path("/sys/firmware/qemu_fw_cfg/by_name/opt/locasos/dev-install/raw").read_bytes().rstrip(b"\x00").decode("ascii")
+    raw = subprocess.check_output([
+        "lsblk", "--json", "--bytes", "--output",
+        "NAME,PATH,TYPE,SIZE,MODEL,SERIAL,RM,RO,FSTYPE,MOUNTPOINTS",
+    ], timeout=5)
+    return verify_vm_target(json.loads(raw), vendor=vendor, firmware_marker=marker)
+
+
+if __name__ == "__main__":
+    try:
+        print(runtime_verify().path)
+    except (UnsafeTarget, OSError, UnicodeError, ValueError, subprocess.CalledProcessError) as error:
+        print("LOCASOS_VM_INSTALL_REFUSED: " + str(error), file=sys.stderr)
+        sys.exit(2)
