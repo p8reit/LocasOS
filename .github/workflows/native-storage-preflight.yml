@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run storage classifier fixtures
         run: python3 -m unittest discover -s packaging/debian/installer -p 'test_*.py' -v
+      - name: Enforce QEMU-only native installer source policy
+        run: python3 packaging/debian/installer/check_vm_only_policy.py
       - name: Validate QEMU-only guest scripts syntax
         run: |
           bash -n packaging/debian/installer/install-qemu-only.sh
