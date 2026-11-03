@@ -32,7 +32,7 @@ jobs:
           current="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$VERSION")"
           echo "$current" | jq -e '.draft == false and .prerelease == true' >/dev/null
           for required in locasos-upgrade-amd64.tar locasos-update.json locasos-update.sig Upgrade-LocasOS.ps1 upgrade-locas.sh; do
-            echo "$current" | jq -e --arg n "$required" '[.assets[].name] | index($n) != null' >/dev/null
+            echo "$current" | jq -e --arg n "$required" '[.assets[].name] | map(select(. == $n)) | length == 1' >/dev/null
           done
           # The key comes from protected environment configuration, never the release.
           echo "$current" | jq -e '[.assets[] | select(.name == "locasos-upgrade-amd64.tar" or .name == "locasos-update.json" or .name == "locasos-update.sig")] | length == 3 and all(.size > 0 and .size <= 536870912)' >/dev/null
