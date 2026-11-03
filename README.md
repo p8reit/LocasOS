@@ -52,3 +52,7 @@ See [Debian native distribution](docs/DEBIAN_NATIVE_DISTRIBUTION.md), [Native Ph
 ## Development
 
 Go source lives under `cmd/` and `internal/`. WSL packaging is in `packaging/wsl/`; native VM experimentation is in `packaging/native/`, and the Debian image factory is in `packaging/debian/`. Build validation is provided by the CI, WSL Appliance Build, and Native VM Foundation workflows.
+
+## Project memory
+
+See the [feature index](project/README.md), [phase ledger](project/PHASES.md), [review findings](project/REVIEW.md) and [parallel work rules](project/PARALLEL_WORK.md). Historical review status is dated; current Debian/native deployment documents take precedence for product scope. Repository-wide agent instructions are in [AGENTS.md](AGENTS.md).

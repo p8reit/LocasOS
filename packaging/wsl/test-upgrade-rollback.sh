@@ -37,6 +37,6 @@ docker run --rm --entrypoint /bin/bash \
     cmp /tmp/old-worker /etc/systemd/system/locas-update-worker.service
     test ! -e /usr/local/sbin/locas-repair-ollama
     test "$(cat /var/lib/locas-ollama/models/preserve)" = "PRESERVE_MODELS"
-    test -n "$(find /var/lib/locas-upgrades -name "preupgrade-*.tar" -type f -print -quit)"
+    test -n "$(find /var/lib/locas-upgrades -name "files.tar" -type f -print -quit)"
     echo "PASS: failed upgrade restored old binaries and services, removed additions and preserved model data"
   '

@@ -26,6 +26,17 @@ type installManifest struct {
 }
 
 func main() {
+	if len(os.Args) == 5 && os.Args[1] == "verify" {
+		public, err := base64.StdEncoding.DecodeString(os.Getenv("LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64"))
+		if err != nil || len(public) != ed25519.PublicKeySize {
+			fatal("pinned public verification key required")
+		}
+		if err := verifyApprovedBundle(os.Args[2], os.Args[3], os.Args[4], ed25519.PublicKey(public)); err != nil {
+			fatal(err.Error())
+		}
+		return
+	}
+
 	if len(os.Args) == 5 && os.Args[1] == "sign-native-iso" {
 		if err := signNativeISO(os.Args[2], os.Args[3], os.Args[4]); err != nil {
 			fatal(err.Error())
