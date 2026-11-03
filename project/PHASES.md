@@ -12,7 +12,7 @@ Phase numbers preserve names found in repository history/docs; they are not comp
 | [P06: Local runtime and inference (6/6B/6C)](phases/P06.md) | In progress; installer repaired locally, target integration pending | F03, F05 |
 | [P07: Optional workspace](phases/P07.md) | Implemented preview | F06 |
 | [P08: Application management](phases/P08.md) | Installation preview; wider lifecycle planned | F07 |
-| [P09: In-place upgrades](phases/P09.md) | Implemented preview; rollback incomplete | F08, F10 |
+| [P09: In-place upgrades](phases/P09.md) | Source rollback hardened; target qualification pending | F08, F10 |
 | [P09B: Trusted updates and release channels](phases/P09B.md) | Implemented preview; release blocked | F08, F04, F10 |
 | [NEXT: Scheduling, storage and release qualification](phases/NEXT.md) | Mixed: scheduler/storage not started; qualification partial | F09, F10 |
 

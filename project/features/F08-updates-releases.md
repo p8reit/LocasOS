@@ -16,7 +16,7 @@ Stable/Early Access selection, signature/digest primitives, build-time key pinni
 
 ## Remaining work
 
-Resolve REVIEW.md update blockers: key newline encoding, approval bound to digest, promotion verification, worker enablement on upgrade, complete rollback and UI consistency. Test signed artifact end to end before promotion; confirm key/environment protection configuration externally.
+Resolve REVIEW.md update blockers: approval bound to digest, promotion verification, target rollback and version policy. Test signed artifact end to end before promotion; confirm key/environment protection configuration externally.
 
 ## Guardrails
 
@@ -29,3 +29,7 @@ Tampered/oversized/traversal packages and wrong channels fail; signed update sur
 ## Resume and handoff
 
 Read [project index](../README.md), [review](../REVIEW.md), [parallel work rules](../PARALLEL_WORK.md) and the linked source before edits. Assign an issue, owner and file reservation; record tested commit, commands/results, blockers and next action here after work. No live assignment was established by this review.
+
+## Implementation update — 2026-11-03
+
+Signing-key newline, update watcher activation and stale UI selection repaired. P09 rollback implementation now covers package scripts/units/new files, with ten passing isolated failure/safety tests. Four dashboard selection/race tests pass. See phase handoffs for limits. Promotion verification and digest-bound approval remain open; real signed WSL validation is still required.

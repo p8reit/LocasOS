@@ -45,3 +45,7 @@ The malformed duplicated block in `install-ollama.sh` was removed, its runner pa
 ## Follow-up: update activation and selection — 2026-11-03
 
 R02 corrected at source and exact printf output tested; official signed artifact validation remains pending. R03 starts the update watcher during upgrade, pending target validation. R09 clears selection on channel changes and rejects stale check responses; four Node regression tests pass. UI manual-only/signature copy now describes the independent worker and preview limits. Release qualification, version policy and public API metadata copy still require follow-up.
+
+## Follow-up: R04 rollback implementation — 2026-11-03
+
+All replaced package files are now inventoried and backed up; failed upgrades restore file contents/modes and remove introduced files. Watcher state is retained and restored. The manual path now uses an explicit package allowlist, rejects links/special files/symlink destinations, binds the checksum to the archive and holds an upgrade lock. Ten filesystem-isolated success/failure/safety tests pass. R04 source implementation is repaired; live WSL service recovery and power-loss/interrupted-process qualification remain open.
