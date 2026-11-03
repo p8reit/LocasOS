@@ -16,7 +16,7 @@ Stable/Early Access selection, signature/digest primitives, build-time key pinni
 
 ## Remaining work
 
-Resolve REVIEW.md update blockers: approval bound to digest, promotion verification, target rollback and version policy. Test signed artifact end to end before promotion; confirm key/environment protection configuration externally.
+Resolve REVIEW.md update blockers: approval bound to digest, operational promotion qualification, target rollback and version policy. Test signed artifact end to end before promotion; confirm key/environment protection configuration externally.
 
 ## Guardrails
 
@@ -32,4 +32,4 @@ Read [project index](../README.md), [review](../REVIEW.md), [parallel work rules
 
 ## Implementation update — 2026-11-03
 
-Signing-key newline, update watcher activation and stale UI selection repaired. P09 rollback implementation now covers package scripts/units/new files, with ten passing isolated failure/safety tests. Four dashboard selection/race tests pass. See phase handoffs for limits. Promotion verification and digest-bound approval remain open; real signed WSL validation is still required.
+Signing-key newline, update watcher activation and stale UI selection repaired. P09 rollback implementation now covers package scripts/units/new files, with ten passing isolated failure/safety tests. Four dashboard selection/race tests pass. See phase handoffs for limits. Promotion signature/digest verification is implemented with nine passing Go cases; protected environment provisioning, real promotion qualification and digest-bound dashboard approval remain open; real signed WSL validation is still required.

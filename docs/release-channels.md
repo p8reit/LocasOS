@@ -33,3 +33,9 @@ wsl -d LocasOS -u root -- /usr/local/bin/ollama list
 ```
 
 The early-access channel is opt-in. Stable should remain the default when LOCAS adds the channel selector.
+
+## Promotion verification configuration (2026-11-03)
+
+The protected `locasos-stable-promotion` environment must define the public variable `LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64`, containing the base64 Ed25519 public key corresponding to the separately held signing secret. This key must be provisioned independently by a trusted maintainer; never copy a key from downloaded release assets. Missing/invalid configuration blocks promotion. No environment configuration was changed by this implementation.
+
+Promotion now downloads the existing signed manifest, signature and archive, verifies raw manifest bytes and archive digest with `locas-release verify VERSION COMMIT DIST`, and requires the signed commit to match the tag. It checks that release asset metadata did not change during verification, then clears only the prerelease flag. This does not replace the required device test, reviewer approval or repository policy forbidding asset/tag mutation. GitHub's promotion call is not an atomic compare-and-swap against asset contents; repository protections and trusted maintainers remain necessary.

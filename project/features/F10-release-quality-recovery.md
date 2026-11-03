@@ -29,3 +29,7 @@ Evidence bundle identifies commit/artifact digest, test results, security review
 ## Resume and handoff
 
 Read [project index](../README.md), [review](../REVIEW.md), [parallel work rules](../PARALLEL_WORK.md) and the linked source before edits. Assign an issue, owner and file reservation; record tested commit, commands/results, blockers and next action here after work. No live assignment was established by this review.
+
+## Validation update — 2026-11-03
+
+A Go 1.23.12 toolchain was downloaded from the official Go distribution and SHA-256 verified against official metadata, under `/workspace/work/go-toolchain` only. `go test ./...` and `go vet ./...` now pass, superseding the original missing-toolchain limitation for this session. New validation includes ten isolated upgrade recovery/safety tests, four embedded-dashboard update-selection tests and nine release verifier cases. Workflow YAML/Bash blocks parse. These are local results, not remote CI or target WSL evidence.

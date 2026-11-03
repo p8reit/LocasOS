@@ -49,3 +49,11 @@ R02 corrected at source and exact printf output tested; official signed artifact
 ## Follow-up: R04 rollback implementation — 2026-11-03
 
 All replaced package files are now inventoried and backed up; failed upgrades restore file contents/modes and remove introduced files. Watcher state is retained and restored. The manual path now uses an explicit package allowlist, rejects links/special files/symlink destinations, binds the checksum to the archive and holds an upgrade lock. Ten filesystem-isolated success/failure/safety tests pass. R04 source implementation is repaired; live WSL service recovery and power-loss/interrupted-process qualification remain open.
+
+## Follow-up: R05 promotion verification — 2026-11-03
+
+Promotion now requires an independently provisioned public key, verifies raw manifest signature, tag version/commit and archive digest, and rejects metadata changes during verification. Nine CLI verification cases pass using a checksum-verified scratch Go 1.23.12 toolchain. Operational protection/key provisioning and actual promotion remain unverified; no remote settings or release state changed. Dashboard digest-bound approval (R06) remains open.
+
+## Local verification update — 2026-11-03
+
+`go test ./...` and `go vet ./...` pass with the verified scratch Go 1.23.12 toolchain. Original review's missing-toolchain result remains historical. Workflow YAML and Bash run-block syntax checks pass. Ten Python recovery/safety tests and four Node dashboard tests pass. Windows/WSL lifecycle, actual signed appliance installation and operational release protections remain unverified.

@@ -14,7 +14,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatal("usage: locas-release sign VERSION COMMIT DIST | public-key")
+		fatal("usage: locas-release sign VERSION COMMIT DIST | public-key | verify VERSION COMMIT DIST")
 	}
 	if os.Args[1] == "keygen" && len(os.Args) == 3 {
 		_, private, err := ed25519.GenerateKey(rand.Reader)
@@ -34,6 +34,19 @@ func main() {
 		fmt.Println("Public verification key:", base64.StdEncoding.EncodeToString(private.Public().(ed25519.PublicKey)))
 		return
 	}
+	if os.Args[1] == "verify" {
+		if len(os.Args) != 5 {
+			fatal("usage: locas-release verify VERSION COMMIT DIST")
+		}
+		public, err := base64.StdEncoding.DecodeString(os.Getenv("LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64"))
+		if err != nil || len(public) != ed25519.PublicKeySize {
+			fatal("pinned public verification key required")
+		}
+		if err := verifyBundle(os.Args[2], os.Args[3], os.Args[4], ed25519.PublicKey(public)); err != nil {
+			fatal(err.Error())
+		}
+		return
+	}
 	key, err := base64.StdEncoding.DecodeString(os.Getenv("LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64"))
 	if err != nil || len(key) != ed25519.PrivateKeySize {
 		fatal("valid signing secret required; refusing unsigned release")
@@ -43,7 +56,7 @@ func main() {
 		return
 	}
 	if os.Args[1] != "sign" || len(os.Args) != 5 {
-		fatal("usage: locas-release sign VERSION COMMIT DIST | public-key")
+		fatal("usage: locas-release sign VERSION COMMIT DIST | public-key | verify VERSION COMMIT DIST")
 	}
 	version, commit, dir := os.Args[2], os.Args[3], os.Args[4]
 	archive := filepath.Join(dir, "locasos-upgrade-amd64.tar")
