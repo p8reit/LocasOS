@@ -17,10 +17,12 @@ if [[ -z "${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" ]]; then
   exit 1
 fi
 go build -trimpath -ldflags="-s -w -X main.buildVersion=${locas_build_version} -X main.buildCommit=${locas_build_commit} -X main.trustedPublicKeyBase64=${LOCAS_UPDATE_PUBLIC_KEY_B64}" -o build/locas-updater ./cmd/locas-updater
+go build -trimpath -ldflags="-s -w" -o build/locas-app-worker ./cmd/locas-app-worker
+go build -trimpath -ldflags="-s -w" -o build/locas-audit ./cmd/locas-audit
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/opt/locas/bin" "$stage/usr/local/sbin" "$stage/etc/systemd/system"
-install -m 0755 build/locas-core build/locas-agent build/locas-updater "$stage/opt/locas/bin/"
+install -m 0755 build/locas-core build/locas-agent build/locas-updater build/locas-app-worker build/locas-audit "$stage/opt/locas/bin/"
 for f in firstboot.sh locas-app-worker.sh install-ollama.sh install-open-webui.sh repair-ollama.sh upgrade-locas.sh; do
   case "$f" in
     firstboot.sh) target=locas-firstboot ;;

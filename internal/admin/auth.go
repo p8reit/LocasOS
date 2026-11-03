@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -31,6 +32,7 @@ type credentials struct {
 
 type session struct {
 	Expires time.Time
+	AuditID string
 }
 
 type Manager struct {
@@ -175,7 +177,11 @@ func (m *Manager) Login(password, remote string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	m.sessions[key] = session{Expires: now.Add(sessionLife)}
+	var auditBytes [16]byte
+	if _, err := rand.Read(auditBytes[:]); err != nil {
+		return "", false
+	}
+	m.sessions[key] = session{Expires: now.Add(sessionLife), AuditID: hex.EncodeToString(auditBytes[:])}
 	return key, true
 }
 
@@ -259,4 +265,23 @@ func (m *Manager) SessionBinding(r *http.Request) string {
 	}
 	sum := sha256.Sum256([]byte(c.Value))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+// AuditSessionID is a random noncredential reference created independently of
+// the cookie. It can correlate authenticated actions without recording tokens.
+func (m *Manager) AuditSessionID(r *http.Request) string {
+	c, err := r.Cookie(cookieName)
+	if err != nil {
+		return ""
+	}
+	return m.AuditIDForToken(c.Value)
+}
+func (m *Manager) AuditIDForToken(token string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.sessions[token]
+	if !ok || !time.Now().Before(s.Expires) {
+		return ""
+	}
+	return s.AuditID
 }

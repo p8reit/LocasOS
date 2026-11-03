@@ -8,6 +8,8 @@ export CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 go build -trimpath -ldflags="-s -w -X main.buildVersion=${locas_build_version} -X main.buildCommit=${locas_build_commit} -X main.trustedPublicKeyBase64=${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" -o build/locas-core ./cmd/locas-core
 go build -trimpath -ldflags="-s -w" -o build/locas-agent ./cmd/locas-agent
 go build -trimpath -ldflags="-s -w -X main.buildVersion=${locas_build_version} -X main.buildCommit=${locas_build_commit} -X main.trustedPublicKeyBase64=${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" -o build/locas-updater ./cmd/locas-updater
+go build -trimpath -ldflags="-s -w" -o build/locas-app-worker ./cmd/locas-app-worker
+go build -trimpath -ldflags="-s -w" -o build/locas-audit ./cmd/locas-audit
 tag="locasos-rootfs-build:dev"
 docker build -f packaging/wsl/rootfs.Dockerfile -t "$tag" .
 container="$(docker create "$tag")"
@@ -21,7 +23,7 @@ echo "Built dist/locasos-wsl-amd64.tar"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 mkdir -p "$stage/opt/locas/bin" "$stage/etc/systemd/system" "$stage/usr/local/sbin"
-cp build/locas-core build/locas-agent build/locas-updater "$stage/opt/locas/bin/"
+cp build/locas-core build/locas-agent build/locas-updater build/locas-app-worker build/locas-audit "$stage/opt/locas/bin/"
 printf 'debian:13\n' > "$stage/opt/locas/bin/locas-os-base"
 cp packaging/wsl/locas-core.service packaging/wsl/locas-agent.service \
    packaging/wsl/locas-app-worker.path packaging/wsl/locas-app-worker.service \

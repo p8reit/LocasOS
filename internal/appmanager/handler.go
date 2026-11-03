@@ -3,12 +3,26 @@ package appmanager
 import (
 	"encoding/json"
 	"errors"
+	"github.com/p8reit/LocasOS/internal/auditop"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 )
+
+type Request struct {
+	App   string              `json:"app"`
+	Audit auditop.Attribution `json:"audit"`
+}
+
+func (r Request) Validate() error {
+	if r.App != "ollama" && r.App != "open-webui" {
+		return errors.New("unsupported application")
+	}
+	return r.Audit.Validate(true)
+}
 
 type Manager struct {
 	Dir string
@@ -49,6 +63,13 @@ func (m *Manager) status(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
+	state := auditop.From(r.Context())
+	peer, observed := auditop.Peer(r.Context())
+	if state == nil || !observed || state.Attribution.Validate(true) != nil || *state.Attribution.PeerUID != peer {
+		http.Error(w, "trusted operation context required", http.StatusForbidden)
+		return
+	}
+
 	var body struct {
 		App string `json:"app"`
 	}
@@ -58,10 +79,15 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request", 400)
 		return
 	}
+	if dec.Decode(new(any)) != io.EOF {
+		http.Error(w, "invalid request", 400)
+		return
+	}
 	if body.App != "ollama" && body.App != "open-webui" {
 		http.Error(w, "unsupported application", 400)
 		return
 	}
+	state.App = body.App
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := os.MkdirAll(m.Dir, 0750); err != nil {
@@ -84,21 +110,37 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "installation already queued or unavailable", code)
 		return
 	}
-	_, writeErr := f.WriteString(body.App + "\n")
+	writeErr := json.NewEncoder(f).Encode(Request{App: body.App, Audit: state.Attribution})
+	if writeErr == nil {
+		writeErr = f.Sync()
+	}
 	closeErr := f.Close()
 	if writeErr != nil || closeErr != nil {
 		_ = os.Remove(temp)
 		http.Error(w, "queue failed", 503)
 		return
 	}
-	if _, err := os.Stat(request); err == nil {
+	if err := os.Link(temp, request); err != nil {
 		_ = os.Remove(temp)
-		http.Error(w, "installation already queued", http.StatusConflict)
+		code := http.StatusServiceUnavailable
+		if errors.Is(err, os.ErrExist) {
+			code = http.StatusConflict
+		}
+		http.Error(w, "installation already queued or unavailable", code)
 		return
 	}
-	if err := os.Rename(temp, request); err != nil {
-		_ = os.Remove(temp)
-		http.Error(w, "queue failed", 503)
+	_ = os.Remove(temp)
+	directory, err := os.Open(m.Dir)
+	if err != nil {
+		state.Outcome = "uncertain"
+		http.Error(w, "queue durability unavailable", 503)
+		return
+	}
+	syncErr := directory.Sync()
+	closeErr = directory.Close()
+	if syncErr != nil || closeErr != nil {
+		state.Outcome = "uncertain"
+		http.Error(w, "queue durability unavailable", 503)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

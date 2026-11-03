@@ -18,6 +18,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/p8reit/LocasOS/internal/auditlog"
+	"github.com/p8reit/LocasOS/internal/auditop"
 	"github.com/p8reit/LocasOS/internal/updateapproval"
 	"github.com/p8reit/LocasOS/internal/updatetrust"
 )
@@ -90,26 +92,40 @@ func run() error {
 	}
 	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 
+	journal, err := auditlog.Open("/var/lib/locas-audit/updater", "updater")
+	if err != nil {
+		return fmt.Errorf("security audit unavailable: %w", err)
+	}
 	buf, err := readQueuedApproval(requestFile)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
+		if auditErr := auditUnreadableUpdate(journal); auditErr != nil {
+			return auditErr
+		}
+		_ = os.Remove(requestFile)
 		setStatus(status{State: "failed", Message: "invalid queued approval file"})
-		_ = os.Remove(requestFile) // remove only the queue entry; never follow a link
 		return err
 	}
-	if err := os.Remove(requestFile); err != nil {
+	req, state, rejected, err := beginAndConsumeUpdateAudit(buf, journal, time.Now(), func() error { return os.Remove(requestFile) })
+	if err != nil {
+		if rejected {
+			_ = os.Remove(requestFile)
+			setStatus(status{State: "failed", Message: "invalid queued update request"})
+		} else if state != nil {
+			setStatus(status{State: "failed", Message: "Update admission or audit outcome unavailable; inspect queue before retrying"})
+		}
 		return err
 	}
-	var req request
-	if len(buf) > 1024 || updateapproval.Decode(strings.NewReader(string(buf)), &req) != nil || req.Validate(time.Now()) != nil {
-		setStatus(status{State: "failed", Message: "invalid queued update request"})
-		return errors.New("invalid update request")
-	}
-	fail := func(err error) error {
-		setStatus(status{State: "failed", Version: req.Version, Channel: req.Channel, Message: err.Error()})
-		return err
+	fail := func(cause error) error {
+		outcome := "failed"
+		if auditErr := auditop.Record(journal, state.Event("updater", "result", outcome, 0)); auditErr != nil {
+			setStatus(status{State: "failed", Version: req.Version, Channel: req.Channel, Message: "Audit outcome unavailable; inspect actual operation state before retrying"})
+			return fmt.Errorf("operation failed and audit outcome unavailable: %w", auditErr)
+		}
+		setStatus(status{State: "failed", Version: req.Version, Channel: req.Channel, Message: cause.Error()})
+		return cause
 	}
 	key, err := base64.StdEncoding.DecodeString(trustedPublicKeyBase64)
 	if err != nil || len(key) != ed25519.PublicKeySize {
@@ -203,18 +219,14 @@ func run() error {
 	if err := refuseDowngrade(filepath.Join(stateDir, "current-version"), req.Version); err != nil {
 		return fail(err)
 	}
-	setStatus(status{State: "applying", Version: req.Version, Channel: req.Channel, Message: "Backup, install and service health checks"})
-	command := exec.CommandContext(ctx, "bash", "/usr/local/sbin/locas-upgrade", archive)
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-	if err := command.Run(); err != nil {
-		return fail(fmt.Errorf("upgrade failed; recovery attempted: %w", err))
-	}
-	if err := updatetrust.PersistInstalledVersion(filepath.Join(stateDir, "current-version"), req.Version); err != nil {
-		return fail(err)
-	}
-	setStatus(status{State: "installed", Version: req.Version, Channel: req.Channel, Message: "Health-checked upgrade completed"})
-	return nil
+	return applyVerifiedUpdate(journal, state, req, func() error {
+		command := exec.CommandContext(ctx, "bash", "/usr/local/sbin/locas-upgrade", archive)
+		command.Stdout = os.Stdout
+		command.Stderr = os.Stderr
+		return command.Run()
+	}, func() error {
+		return updatetrust.PersistInstalledVersion(filepath.Join(stateDir, "current-version"), req.Version)
+	}, setStatus)
 }
 
 // Stable permits only published non-prereleases. Early Access permits both
@@ -461,4 +473,99 @@ func readQueuedApproval(filename string) ([]byte, error) {
 		return nil, errors.New("queued approval exceeds size limit")
 	}
 	return data, nil
+}
+
+func beginUpdateAudit(data []byte, recorder auditlog.Recorder, now time.Time) (request, *auditop.State, bool, error) {
+	var req request
+	decodeErr := updateapproval.Decode(strings.NewReader(string(data)), &req)
+	a := req.Audit
+	source := "agent_queue"
+	if decodeErr != nil || a.Validate(true) != nil {
+		id, err := auditop.NewID()
+		if err != nil {
+			return req, nil, false, err
+		}
+		a = auditop.Attribution{CorrelationID: id, Principal: "system"}
+		source = "system"
+	}
+	state := &auditop.State{Attribution: a, Operation: "update.install", Source: source}
+	if req.Selection.Validate() == nil {
+		state.Version = req.Version
+		state.Channel = req.Channel
+		state.SHA256 = req.SHA256
+	}
+	if err := auditop.Record(recorder, state.Event("updater", "intent", "pending", 0)); err != nil {
+		return req, nil, false, err
+	}
+	if decodeErr != nil || len(data) > 1024 || req.Validate(now) != nil || req.Audit.Validate(true) != nil {
+		if err := auditop.Record(recorder, state.Event("updater", "result", "denied", 0)); err != nil {
+			return req, state, false, err
+		}
+		return req, state, true, errors.New("invalid or expired attributed update request")
+	}
+	return req, state, false, nil
+}
+func auditUnreadableUpdate(recorder auditlog.Recorder) error {
+	id, err := auditop.NewID()
+	if err != nil {
+		return err
+	}
+	state := &auditop.State{Attribution: auditop.Attribution{CorrelationID: id, Principal: "system"}, Operation: "update.install", Source: "system"}
+	if err := auditop.Record(recorder, state.Event("updater", "intent", "pending", 0)); err != nil {
+		return err
+	}
+	return auditop.Record(recorder, state.Event("updater", "result", "denied", 0))
+}
+
+// Admission persists intent before consuming a request. On audit failure the
+// original queue remains available for explicit inspection and recovery.
+func beginAndConsumeUpdateAudit(data []byte, recorder auditlog.Recorder, now time.Time, consume func() error) (request, *auditop.State, bool, error) {
+	req, state, rejected, err := beginUpdateAudit(data, recorder, now)
+	if err != nil {
+		return req, state, rejected, err
+	}
+	if err := consume(); err != nil {
+		if auditErr := auditop.Record(recorder, state.Event("updater", "result", "failed", 0)); auditErr != nil {
+			return req, state, false, errors.New("queue consumption and audit outcome unavailable")
+		}
+		return req, state, false, errors.New("update queue consumption failed")
+	}
+	return req, state, false, nil
+}
+
+// Effects are injectable so tests can prove each durable checkpoint precedes
+// its external action without running an installer or changing host state.
+func applyVerifiedUpdate(recorder auditlog.Recorder, state *auditop.State, req request, apply, persist func() error, publish func(status)) error {
+	fail := func(cause error, started bool) error {
+		outcome := "failed"
+		message := "Update was not applied"
+		if started {
+			outcome = "uncertain"
+			message = "Update may be partially applied; inspect state before retrying"
+		}
+		if err := auditop.Record(recorder, state.Event("updater", "result", outcome, 0)); err != nil {
+			message = "Audit outcome unavailable; inspect actual operation state before retrying"
+		}
+		publish(status{State: "failed", Version: req.Version, Channel: req.Channel, Message: message})
+		return cause
+	}
+	if err := auditop.Record(recorder, state.Event("updater", "verified", "allowed", 0)); err != nil {
+		return fail(err, false)
+	}
+	if err := auditop.Record(recorder, state.Event("updater", "apply", "pending", 0)); err != nil {
+		return fail(err, false)
+	}
+	publish(status{State: "applying", Version: req.Version, Channel: req.Channel, Message: "Backup, install and service health checks"})
+	if err := apply(); err != nil {
+		return fail(err, true)
+	}
+	if err := persist(); err != nil {
+		return fail(err, true)
+	}
+	if err := auditop.Record(recorder, state.Event("updater", "result", "succeeded", 0)); err != nil {
+		publish(status{State: "failed", Version: req.Version, Channel: req.Channel, Message: "Audit outcome unavailable; update may be applied, verify status before retrying"})
+		return err
+	}
+	publish(status{State: "installed", Version: req.Version, Channel: req.Channel, Message: "Health-checked upgrade completed"})
+	return nil
 }

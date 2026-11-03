@@ -11,7 +11,9 @@ RUN mkdir -p /opt/locas/bin /opt/locas/web /var/lib/locas /run/locas \
     && useradd --system --create-home --shell /usr/sbin/nologin locas-ollama \
     && mkdir -p /var/lib/locas-updates /var/lib/locas-upgrades \
     && chmod 0755 /var/lib/locas-updates && chmod 0700 /var/lib/locas-upgrades \
-    && chmod 0750 /var/lib/locas
+    && chmod 0750 /var/lib/locas \
+    && install -d -m 0700 -o root -g root /var/lib/locas-audit \
+    && install -d -m 0700 -o locas-agent -g locas-agent /var/lib/locas-agent-audit
 COPY packaging/wsl/wsl.conf /etc/wsl.conf
 COPY packaging/wsl/locas-core.service /etc/systemd/system/locas-core.service
 COPY packaging/wsl/locas-agent.service /etc/systemd/system/locas-agent.service
@@ -29,5 +31,7 @@ COPY packaging/wsl/locas-firstboot.service /etc/systemd/system/locas-firstboot.s
 COPY build/locas-core /opt/locas/bin/locas-core
 COPY build/locas-agent /opt/locas/bin/locas-agent
 COPY build/locas-updater /opt/locas/bin/locas-updater
+COPY build/locas-app-worker /opt/locas/bin/locas-app-worker
+COPY build/locas-audit /opt/locas/bin/locas-audit
 RUN chmod 0755 /usr/local/sbin/locas-firstboot /usr/local/sbin/locas-install-ollama /usr/local/sbin/locas-install-open-webui /usr/local/sbin/locas-app-worker /usr/local/sbin/locas-upgrade /opt/locas/bin/* \
     && systemctl enable locas-firstboot.service locas-agent.service locas-core.service locas-app-worker.path locas-update-worker.path

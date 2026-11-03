@@ -5,12 +5,13 @@ package updateapproval
 import (
 	"encoding/json"
 	"errors"
+	"github.com/p8reit/LocasOS/internal/auditop"
+	"github.com/p8reit/LocasOS/internal/updatetrust"
 	"io"
 	"regexp"
 	"time"
 )
 
-var versionPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 var hexPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 const Lifetime = 10 * time.Minute
@@ -23,7 +24,7 @@ type Selection struct {
 }
 
 func (s Selection) Validate() error {
-	if !versionPattern.MatchString(s.Version) || (s.Channel != "stable" && s.Channel != "beta") || !hexPattern.MatchString(s.SHA256) || !hexPattern.MatchString(s.Token) {
+	if _, ok := updatetrust.VersionParts(s.Version); !ok || (s.Channel != "stable" && s.Channel != "beta") || !hexPattern.MatchString(s.SHA256) || !hexPattern.MatchString(s.Token) {
 		return errors.New("invalid artifact approval")
 	}
 	return nil
@@ -33,7 +34,8 @@ func (s Selection) Validate() error {
 // trusted root authorization; the worker still verifies its own publisher key.
 type Job struct {
 	Selection
-	ExpiresAt time.Time `json:"expires_at"`
+	ExpiresAt time.Time           `json:"expires_at"`
+	Audit     auditop.Attribution `json:"audit"`
 }
 
 func (j Job) Validate(now time.Time) error {
@@ -43,7 +45,7 @@ func (j Job) Validate(now time.Time) error {
 	if !now.Before(j.ExpiresAt) || j.ExpiresAt.After(now.Add(Lifetime)) {
 		return errors.New("expired or invalid approval lifetime")
 	}
-	return nil
+	return j.Audit.Validate(false)
 }
 
 // Decode rejects unknown fields and trailing JSON at every privilege boundary.

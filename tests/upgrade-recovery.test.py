@@ -21,6 +21,8 @@ AGENT = 'opt/locas/bin/locas-agent'
 SCRIPT = 'usr/local/sbin/locas-upgrade'
 UNIT = 'etc/systemd/system/locas-core.service'
 NEW = 'etc/systemd/system/locas-update-worker.path'
+AUDIT_BIN = 'opt/locas/bin/locas-audit'
+APP_WORKER_BIN = 'opt/locas/bin/locas-app-worker'
 
 class UpgradeTest(unittest.TestCase):
     def setUp(self):
@@ -39,6 +41,13 @@ class UpgradeTest(unittest.TestCase):
         self.data = self.root / 'var/lib/models/model.bin'
         self.data.parent.mkdir(parents=True)
         self.data.write_bytes(b'valuable-model')
+        self.audit_dirs = [self.root / 'var/lib/locas-audit/app-worker',
+                           self.root / 'var/lib/locas-agent-audit']
+        for directory in self.audit_dirs:
+            directory.mkdir(parents=True, mode=0o700)
+            directory.chmod(0o700)
+            (directory / 'events.jsonl').write_bytes(b'private-existing-audit')
+            (directory / 'events.jsonl').chmod(0o600)
         self.bin = self.base / 'bin'
         self.bin.mkdir()
         self.command('id', 'echo 0')
@@ -74,6 +83,7 @@ exit 0''')
     def bundle(self, extras=None, link=None):
         self.archive = self.base / 'update.tar'
         self.payload = {'opt/locas/bin/locas-os-base': b'debian:13', CORE: b'new-core', AGENT: b'new-agent', SCRIPT: b'new-upgrade', UNIT: b'new-unit', NEW: b'new-worker'}
+        self.payload.update({AUDIT_BIN: b'new-audit-verifier', APP_WORKER_BIN: b'new-attributed-app-worker'})
         self.payload.update(extras or {})
         with tarfile.open(self.archive, 'w') as archive:
             for name, data in self.payload.items():
@@ -97,7 +107,26 @@ exit 0''')
             self.assertEqual((self.root/name).read_bytes(), data, name)
         self.assertEqual((self.root/UNIT).stat().st_mode & 0o777, 0o640)
         self.assertFalse((self.root/NEW).exists())
+        self.assertFalse((self.root/AUDIT_BIN).exists())
+        self.assertFalse((self.root/APP_WORKER_BIN).exists())
+        self.assert_audit_preserved()
         self.assertEqual(self.data.read_bytes(), b'valuable-model')
+
+    def assert_audit_preserved(self):
+        for directory in self.audit_dirs:
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+            journal = directory / 'events.jsonl'
+            self.assertEqual(journal.read_bytes(), b'private-existing-audit')
+            self.assertEqual(journal.stat().st_mode & 0o777, 0o600)
+
+    def test_rejects_audit_journal_payload(self):
+        for path in ('var/lib/locas-audit/app-worker/events.jsonl',
+                     'var/lib/locas-agent-audit/events.jsonl'):
+            with self.subTest(path=path):
+                self.bundle({path: b'forged-journal'})
+                result = self.run_upgrade()
+                self.assertNotEqual(result.returncode, 0)
+                self.assert_restored()
 
     def test_success_installs_files_and_activates_both_workers(self):
         self.bundle()
@@ -105,6 +134,7 @@ exit 0''')
         self.assertEqual(result.returncode, 0, result.stderr)
         for name, data in self.payload.items():
             self.assertEqual((self.root/name).read_bytes(), data)
+        self.assert_audit_preserved()
         self.assertIn('enable --now locas-app-worker.path', (self.base/'calls').read_text())
         self.assertIn('enable --now locas-update-worker.path', (self.base/'calls').read_text())
         self.assertEqual(self.data.read_bytes(), b'valuable-model')

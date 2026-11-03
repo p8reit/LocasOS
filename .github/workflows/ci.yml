@@ -16,8 +16,8 @@ jobs:
       - name: Go tests
         run: |
           if [ -f go.mod ]; then go test ./...; else echo "Go scaffold pending: tracked in LOS-002"; fi
-      - name: Approval concurrency race checks
-        run: go test -race ./internal/updateapproval ./internal/updatequeue ./internal/updatetrust
+      - name: Security audit and approval race checks
+        run: go test -race ./internal/auditlog ./internal/auditop ./internal/admin ./internal/peercred ./internal/appmanager ./internal/updateapproval ./internal/updatequeue ./internal/updatetrust ./cmd/locas-core ./cmd/locas-agent ./cmd/locas-updater ./cmd/locas-app-worker
       - name: Build identity and actual binary metadata
         run: LOCAS_TEST_GO="$(command -v go)" python3 tests/build-identity.test.py
       - name: Go formatting
@@ -66,6 +66,8 @@ jobs:
           sha256sum -c locasos-upgrade-amd64.tar.sha256
           tar tf locasos-upgrade-amd64.tar > upgrade-manifest.txt
           grep -qx 'opt/locas/bin/locas-core' upgrade-manifest.txt
+          grep -qx 'opt/locas/bin/locas-audit' upgrade-manifest.txt
+          grep -qx 'opt/locas/bin/locas-app-worker' upgrade-manifest.txt
           if grep -Eq '^([.]/?)$' upgrade-manifest.txt; then
             echo 'Unsafe upgrade archive modifies filesystem root' >&2
             exit 1
