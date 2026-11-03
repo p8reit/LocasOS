@@ -16,7 +16,7 @@ Stable/Early Access selection, signature/digest primitives, build-time key pinni
 
 ## Remaining work
 
-Resolve REVIEW.md update blockers: operational promotion qualification, target rollback and complete audit attribution. Test signed artifact end to end before promotion; confirm key/environment protection configuration externally.
+Resolve REVIEW.md update blockers: operational promotion qualification, target rollback and audit integration/operational qualification. Test signed artifact end to end before promotion; confirm key/environment protection configuration externally.
 
 ## Guardrails
 
@@ -41,3 +41,9 @@ Signing-key newline, update watcher activation and stale UI selection repaired. 
 ## P09F implementation — 2026-11-03
 
 [Phase 9F](../phases/P09F.md) implements official WSL tag/full-commit stamping and truthful running-build versus last verified record display. Numeric policy blocks known same/older releases at discovery, enqueue and root admission; invalid/conflicting records fail closed. Unknown legacy admission is explicitly warned. Root persists verified version atomically only after health acceptance. See [version contract](../../docs/update-version-policy.md). Operational qualification/audit gates remain open.
+
+## P09G update auditing — implementation complete / pending approval
+
+Updater source now records attributed queue admission, verified/apply checkpoints and durable result in a root-owned journal; Core/Agent link queue admission with correlation/session audit references and observed IPC UID. Pending/uncertain results require operator reconciliation, not automatic retry. Old unattributed queue payloads fail closed; upgrade the Core/Agent/workers/units as a coherent bundle and request fresh approval after reconciling legacy pending work. Manual upgrade scripts remain outside attributed coverage. See [audit contract](../../docs/security/auditing.md). LOS-124 source integration and independent review are complete; exact CI evidence, merge approval and real signed WSL qualification remain gates. P09F merged as PR #123 (`d144cd7`); that merge is not a release/deployment.
+
+P09G source integration and independent review are complete; local validation and qualification limits are recorded in [phase evidence](../phases/P09G.md). Matching PR CI and separate merge approval remain required.

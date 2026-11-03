@@ -9,11 +9,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/p8reit/LocasOS/internal/admin"
 	"github.com/p8reit/LocasOS/internal/agentclient"
+	"github.com/p8reit/LocasOS/internal/auditlog"
+	"github.com/p8reit/LocasOS/internal/auditop"
 	"github.com/p8reit/LocasOS/internal/server"
 	"github.com/p8reit/LocasOS/internal/updatetrust"
 )
@@ -55,6 +58,90 @@ func main() {
 		log.Fatalf("administrator state unavailable: %v", err)
 	}
 
+	journal, err := auditlog.Open(filepath.Join(stateDir, "audit"), "core")
+	if err != nil {
+		log.Fatalf("security audit unavailable: %v", err)
+	}
+	updates := newUpdatesController(admins, stateDir, socket, trustedPublicKeyBase64)
+	mux := coreRoutes(admins, socket, updates)
+	audited := coreAuditHandler(admins, journal, mux)
+
+	srv := &http.Server{
+		Addr: addr,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Guard against DNS rebinding and unexpected Host headers.
+			host := r.Host
+			if !strings.HasPrefix(host, "127.0.0.1:") && !strings.HasPrefix(host, "localhost:") {
+				auditHostDenied(admins, journal, w, r)
+				return
+			}
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			audited.ServeHTTP(w, r)
+		}),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	log.Printf("locas-core listening on %s", addr)
+	log.Fatal(srv.ListenAndServe())
+}
+
+func sendJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
+
+func appProxy(w http.ResponseWriter, r *http.Request, socket, method, path string, payload []byte) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	tr := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "unix", socket)
+	}}
+	defer tr.CloseIdleConnections()
+	req, err := http.NewRequestWithContext(ctx, method, "http://agent"+path, strings.NewReader(string(payload)))
+	if err != nil {
+		http.Error(w, "invalid request", 500)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if method == http.MethodPost {
+		if err := auditop.SetHeaders(req, r.Context()); err != nil {
+			http.Error(w, "operation attribution unavailable", 503)
+			return
+		}
+	}
+	resp, err := (&http.Client{Transport: tr, Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		if method == http.MethodPost {
+			if state := auditop.From(r.Context()); state != nil {
+				state.Outcome = "uncertain"
+			}
+			http.Error(w, "operation outcome uncertain; check operation status before retrying", 503)
+		} else {
+			http.Error(w, "app manager unavailable", 503)
+		}
+		return
+	}
+	defer resp.Body.Close()
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 8193))
+	if method == http.MethodPost && (resp.StatusCode >= 500 || readErr != nil || len(body) > 8192) {
+		if state := auditop.From(r.Context()); state != nil {
+			state.Outcome = "uncertain"
+		}
+		http.Error(w, "operation outcome uncertain; check operation status before retrying", http.StatusServiceUnavailable)
+		return
+	}
+	if readErr != nil || len(body) > 8192 {
+		http.Error(w, "invalid app manager response", http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(body)
+}
+
+func coreRoutes(admins *admin.Manager, socket string, updates *updatesController) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/", server.NewHandler("locas-core"))
 	mux.HandleFunc("GET /brand/icon.webp", func(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +158,6 @@ func main() {
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
 		_, _ = w.Write(landingPage)
 	})
-	updates := newUpdatesController(admins, stateDir, socket, trustedPublicKeyBase64)
 	updateHandler := updates.Handler()
 	mux.Handle("/api/updates", updateHandler)
 	mux.Handle("/api/updates/", updateHandler)
@@ -95,6 +181,9 @@ func main() {
 			http.Error(w, "setup rejected: administrator exists or password is invalid", http.StatusConflict)
 			return
 		}
+		if state := auditop.From(r.Context()); state != nil {
+			state.Attribution.Principal = "administrator"
+		}
 		sendJSON(w, http.StatusCreated, map[string]string{"status": "configured"})
 	})
 	mux.HandleFunc("POST /api/login", func(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +200,10 @@ func main() {
 		if !ok {
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 			return
+		}
+		if state := auditop.From(r.Context()); state != nil {
+			state.Attribution.Principal = "administrator"
+			state.Attribution.SessionID = admins.AuditIDForToken(key)
 		}
 		admin.SetCookie(w, key, r.TLS != nil)
 		sendJSON(w, http.StatusOK, map[string]string{"status": "authenticated"})
@@ -229,17 +322,26 @@ func main() {
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := client.Do(req)
 		if err != nil {
-			http.Error(w, "local runtime unavailable", http.StatusServiceUnavailable)
+			if state := auditop.From(r.Context()); state != nil {
+				state.Outcome = "uncertain"
+			}
+			http.Error(w, "model pull outcome uncertain; check runtime status before retrying", http.StatusServiceUnavailable)
 			return
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			http.Error(w, "model pull failed", http.StatusBadGateway)
+			if state := auditop.From(r.Context()); state != nil {
+				state.Outcome = "uncertain"
+			}
+			http.Error(w, "model pull outcome uncertain; check runtime status", http.StatusBadGateway)
 			return
 		}
 		var outcome map[string]any
 		if err := json.NewDecoder(io.LimitReader(resp.Body, 16384)).Decode(&outcome); err != nil {
-			http.Error(w, "invalid runtime response", http.StatusBadGateway)
+			if state := auditop.From(r.Context()); state != nil {
+				state.Outcome = "uncertain"
+			}
+			http.Error(w, "model pull outcome uncertain; check runtime status", http.StatusBadGateway)
 			return
 		}
 		sendJSON(w, http.StatusOK, map[string]any{"status": "download_complete", "model": payload.Model})
@@ -323,6 +425,9 @@ func main() {
 			http.Error(w, "unsupported app", http.StatusBadRequest)
 			return
 		}
+		if state := auditop.From(r.Context()); state != nil {
+			state.App = body.App
+		}
 		data, _ := json.Marshal(body)
 		appProxy(w, r, socket, http.MethodPost, "/internal/apps/install", data)
 	})
@@ -338,52 +443,5 @@ func main() {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
-	srv := &http.Server{
-		Addr: addr,
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Guard against DNS rebinding and unexpected Host headers.
-			host := r.Host
-			if !strings.HasPrefix(host, "127.0.0.1:") && !strings.HasPrefix(host, "localhost:") {
-				http.Error(w, "unexpected host", http.StatusBadRequest)
-				return
-			}
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			mux.ServeHTTP(w, r)
-		}),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
-	log.Printf("locas-core listening on %s", addr)
-	log.Fatal(srv.ListenAndServe())
-}
-
-func sendJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
-}
-
-func appProxy(w http.ResponseWriter, r *http.Request, socket, method, path string, payload []byte) {
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-	tr := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "unix", socket)
-	}}
-	defer tr.CloseIdleConnections()
-	req, err := http.NewRequestWithContext(ctx, method, "http://agent"+path, strings.NewReader(string(payload)))
-	if err != nil {
-		http.Error(w, "invalid request", 500)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Transport: tr, Timeout: 5 * time.Second}).Do(req)
-	if err != nil {
-		http.Error(w, "app manager unavailable", 503)
-		return
-	}
-	defer resp.Body.Close()
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, io.LimitReader(resp.Body, 8192))
+	return mux
 }

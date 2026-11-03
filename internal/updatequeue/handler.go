@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/p8reit/LocasOS/internal/auditop"
 	"github.com/p8reit/LocasOS/internal/updateapproval"
 )
 
@@ -41,11 +42,26 @@ func (m *Manager) status(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
+	state := auditop.From(r.Context())
+	peer, observed := auditop.Peer(r.Context())
+	if state == nil || !observed || state.Attribution.Validate(true) != nil || *state.Attribution.PeerUID != peer {
+		http.Error(w, "trusted operation context required", http.StatusForbidden)
+		return
+	}
+
 	var req Request
 	if err := updateapproval.Decode(http.MaxBytesReader(w, r.Body, 1024), &req); err != nil || req.Validate(time.Now()) != nil {
 		http.Error(w, "invalid or expired artifact approval", http.StatusBadRequest)
 		return
 	}
+	if !req.Audit.SameAssertion(state.Attribution) {
+		http.Error(w, "operation attribution mismatch", http.StatusForbidden)
+		return
+	}
+	req.Audit = state.Attribution
+	state.Version = req.Version
+	state.Channel = req.Channel
+	state.SHA256 = req.SHA256
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	status, _ := os.ReadFile("/var/lib/locas-updates/status.json")
@@ -89,6 +105,19 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = os.Remove(temp)
+	directory, err := os.Open(m.Dir)
+	if err != nil {
+		state.Outcome = "uncertain"
+		http.Error(w, "queue durability unavailable", 503)
+		return
+	}
+	syncErr := directory.Sync()
+	closeErr = directory.Close()
+	if syncErr != nil || closeErr != nil {
+		state.Outcome = "uncertain"
+		http.Error(w, "queue durability unavailable", 503)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]string{

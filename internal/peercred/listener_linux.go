@@ -9,6 +9,7 @@ import (
 type Listener struct {
 	*net.UnixListener
 	ExpectedUID uint32
+	OnReject    func(*uint32)
 }
 
 func (l *Listener) Accept() (net.Conn, error) {
@@ -20,6 +21,13 @@ func (l *Listener) Accept() (net.Conn, error) {
 		uid, err := UID(conn)
 		if err == nil && AllowedUID(uid, l.ExpectedUID) {
 			return conn, nil
+		}
+		if l.OnReject != nil {
+			if err == nil {
+				l.OnReject(&uid)
+			} else {
+				l.OnReject(nil)
+			}
 		}
 		_ = conn.Close()
 	}

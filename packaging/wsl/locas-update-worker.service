@@ -6,11 +6,13 @@ Requires=locas-firstboot.service
 [Service]
 Type=oneshot
 User=root
+StateDirectory=locas-audit
+StateDirectoryMode=0700
 ExecStart=/opt/locas/bin/locas-updater
 TimeoutStartSec=30min
 NoNewPrivileges=yes
 ProtectHome=yes
 ProtectSystem=strict
-ReadWritePaths=/opt/locas/bin /usr/local/sbin /etc/systemd/system /var/lib/locas /var/lib/locas-updates /var/lib/locas-upgrades
+ReadWritePaths=/opt/locas/bin /usr/local/sbin /etc/systemd/system /var/lib/locas /var/lib/locas-updates /var/lib/locas-upgrades /var/lib/locas-audit
 [Install]
 WantedBy=multi-user.target

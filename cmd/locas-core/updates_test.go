@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/p8reit/LocasOS/internal/admin"
+	"github.com/p8reit/LocasOS/internal/auditlog"
+	"github.com/p8reit/LocasOS/internal/auditop"
 	"github.com/p8reit/LocasOS/internal/updateapproval"
 	"github.com/p8reit/LocasOS/internal/updatequeue"
 	"github.com/p8reit/LocasOS/internal/updatetrust"
@@ -36,6 +38,7 @@ type updateFixture struct {
 	private   ed25519.PrivateKey
 	calls     int
 	job       updateapproval.Job
+	recorder  auditlog.Recorder
 }
 
 func newUpdateFixture(t *testing.T) *updateFixture {
@@ -58,6 +61,11 @@ func newUpdateFixture(t *testing.T) *updateFixture {
 	}
 	f := &updateFixture{private: key, cookie: &http.Cookie{Name: "locas_session", Value: token}, rel: releaseInfo{Tag: "v1.2.3", URL: releasePageRoot + "v1.2.3"}}
 	f.sign(t, updatetrust.Manifest{Version: "v1.2.3", Platform: "linux-amd64-wsl2", File: "locasos-upgrade-amd64.tar", SHA256: strings.Repeat("a", 64), Commit: strings.Repeat("b", 40)})
+	journal, err := auditlog.Open(filepath.Join(dir, "audit"), "core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.recorder = journal
 	f.u = newUpdatesController(admins, dir, "unused", base64.StdEncoding.EncodeToString(pub))
 	f.u.versionFile = filepath.Join(dir, "current-version")
 	f.u.client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
@@ -115,7 +123,7 @@ func (f *updateFixture) req(t *testing.T, method, path string, body any) *httpte
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("X-Locas-Request", "1")
 	w := httptest.NewRecorder()
-	f.u.Handler().ServeHTTP(w, r)
+	coreAuditHandler(f.u.admins, f.recorder, f.u.Handler()).ServeHTTP(w, r)
 	return w
 }
 func (f *updateFixture) check(t *testing.T) map[string]json.RawMessage {
@@ -309,7 +317,7 @@ func TestUpdateEndpointsRequireAuthenticationAndMutationHeader(t *testing.T) {
 	r := httptest.NewRequest("POST", "/api/updates/install", strings.NewReader(`{}`))
 	r.AddCookie(f.cookie)
 	w := httptest.NewRecorder()
-	f.u.Handler().ServeHTTP(w, r)
+	coreAuditHandler(f.u.admins, f.recorder, f.u.Handler()).ServeHTTP(w, r)
 	if w.Code != 403 {
 		t.Fatal("unsafe mutation accepted")
 	}
@@ -347,7 +355,15 @@ func TestApprovedIdentitySurvivesCoreToAgentQueue(t *testing.T) {
 	dir := t.TempDir()
 	handler := updatequeue.New(dir).Handler()
 	f.u.enqueue = func(w http.ResponseWriter, _ *http.Request, data []byte) {
-		handler.ServeHTTP(w, httptest.NewRequest("POST", "/install", bytes.NewReader(data)))
+		var job updateapproval.Job
+		if err := updateapproval.Decode(bytes.NewReader(data), &job); err != nil {
+			t.Fatal(err)
+		}
+		uid := uint32(os.Getuid())
+		job.Audit.PeerUID = &uid
+		state := &auditop.State{Attribution: job.Audit, Operation: "update.install", Source: "core_ipc"}
+		ctx := auditop.WithPeer(auditop.With(context.Background(), state), uid)
+		handler.ServeHTTP(w, httptest.NewRequest("POST", "/install", bytes.NewReader(data)).WithContext(ctx))
 	}
 	a := selected(t, f.check(t))
 	w := f.req(t, "POST", "/api/updates/install", a)

@@ -8,6 +8,8 @@ ALLOWED_FILES = {
     "opt/locas/bin/locas-core",
     "opt/locas/bin/locas-agent",
     "opt/locas/bin/locas-updater",
+    "opt/locas/bin/locas-app-worker",
+    "opt/locas/bin/locas-audit",
     "usr/local/sbin/locas-firstboot",
     "usr/local/sbin/locas-app-worker",
     "usr/local/sbin/locas-install-ollama",

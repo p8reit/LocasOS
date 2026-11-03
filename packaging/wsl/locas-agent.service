@@ -6,6 +6,8 @@ Requires=locas-firstboot.service
 Type=simple
 User=locas-agent
 Group=locas-agent
+StateDirectory=locas-agent-audit
+StateDirectoryMode=0700
 RuntimeDirectory=locas
 RuntimeDirectoryMode=0750
 Environment=LOCAS_AGENT_SOCKET=/run/locas/agent.sock

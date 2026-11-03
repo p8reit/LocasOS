@@ -42,7 +42,12 @@ func TestListenerRejectsUnauthorizedUID(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer underlying.Close()
-	l := &Listener{UnixListener: underlying, ExpectedUID: uint32(os.Getuid()) + 1}
+	rejected := make(chan uint32, 1)
+	l := &Listener{UnixListener: underlying, ExpectedUID: uint32(os.Getuid()) + 1, OnReject: func(uid *uint32) {
+		if uid != nil {
+			rejected <- *uid
+		}
+	}}
 	done := make(chan struct{})
 	go func() {
 		c, err := l.Accept()
@@ -62,6 +67,14 @@ func TestListenerRejectsUnauthorizedUID(t *testing.T) {
 	var b [1]byte
 	if _, err := c.Read(b[:]); err != io.EOF {
 		t.Fatalf("unauthorized peer must be disconnected; got %v", err)
+	}
+	select {
+	case uid := <-rejected:
+		if uid != uint32(os.Getuid()) {
+			t.Fatal("wrong rejected UID")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("missing rejection callback")
 	}
 	_ = underlying.Close()
 	select {

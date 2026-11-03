@@ -31,3 +31,9 @@
 No privileged management operation may ship until peer authorization, negative permission tests, audit event output and rollback documentation are in place.
 
 This document is an initial threat assessment, not a completed security audit.
+
+## Current local runtime audit boundary — P09G / LOS-124
+
+The implemented dashboard remains loopback HTTP; the LAN/HTTPS boundary above is a future design requirement, not permission to expose this service. Restricted Core-to-Agent IPC uses kernel peer UID checks and typed mutation requests. Current authentication, model activity metadata, app/update admission and root worker checkpoints have [private durable service journals](auditing.md). No prompt, reply, password, cookie or approval token is an audit field.
+
+A compromised Core can forge administrator assertions; a compromised Agent can forge queue attribution. Worker `writer_uid` is observed locally, while retained queue `peer_uid` is asserted by Agent. Local hash chains detect corruption but do not resist a writer/root rewriting history or prove retention without external anchors. Full journals deny new audited work and can be an availability target; do not bypass auditing or silently delete evidence. Pending intents and uncertain results require operation-state investigation. Manual install/repair paths, external anchoring/retention, broader Docker policy, reset design and target recovery qualification remain outside this source increment. The release gate above remains in force.

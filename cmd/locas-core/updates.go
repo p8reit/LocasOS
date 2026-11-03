@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/p8reit/LocasOS/internal/admin"
+	"github.com/p8reit/LocasOS/internal/auditop"
 	"github.com/p8reit/LocasOS/internal/updateapproval"
 	"github.com/p8reit/LocasOS/internal/updateprefs"
 	"github.com/p8reit/LocasOS/internal/updatetrust"
@@ -129,6 +130,9 @@ func (u *updatesController) channel(w http.ResponseWriter, r *http.Request) {
 	}
 	u.channelMu.Lock()
 	defer u.channelMu.Unlock()
+	if state := auditop.From(r.Context()); state != nil {
+		state.Channel = selection.Channel
+	}
 	u.approvals.InvalidateAll() // preference is appliance-wide, not session-local
 	if err := updateprefs.Save(u.stateDir, selection.Channel); err != nil {
 		http.Error(w, "cannot save update channel", http.StatusInternalServerError)
@@ -162,6 +166,15 @@ func (u *updatesController) install(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "approval expired, consumed or changed; check releases again", http.StatusConflict)
 		return
 	}
+	state := auditop.From(r.Context())
+	if state == nil || state.Attribution.Validate(false) != nil {
+		http.Error(w, "operation attribution unavailable", 503)
+		return
+	}
+	job.Audit = state.Attribution
+	state.Version = selection.Version
+	state.Channel = selection.Channel
+	state.SHA256 = selection.SHA256
 	data, _ := json.Marshal(job)
 	// The token stays consumed on IPC failure/409: an uncertain attempt must not
 	// silently regain authorization. Fresh discovery is the only retry path.
@@ -242,6 +255,9 @@ func (u *updatesController) signedManifest(ctx context.Context, rel releaseInfo,
 	return m, nil
 }
 func (u *updatesController) check(w http.ResponseWriter, r *http.Request) {
+	if state := auditop.From(r.Context()); state != nil {
+		state.Outcome = "denied"
+	}
 	session := u.admins.SessionBinding(r)
 	u.channelMu.Lock()
 	channel := r.URL.Query().Get("channel")
@@ -322,6 +338,12 @@ func (u *updatesController) check(w http.ResponseWriter, r *http.Request) {
 			if policy.Eligible && saveErr == nil && saved == channel && u.admins.SessionBinding(r) == session && session != "" {
 				selection, expires, issueErr := u.approvals.Issue(session, generation, manifest.Version, channel, strings.ToLower(manifest.SHA256))
 				if issueErr == nil {
+					if state := auditop.From(r.Context()); state != nil {
+						state.Version = selection.Version
+						state.Channel = selection.Channel
+						state.SHA256 = selection.SHA256
+						state.Outcome = "allowed"
+					}
 					result["install_ready"] = true
 					result["approval"] = selection
 					result["approval_expires_at"] = expires.UTC().Format(time.RFC3339Nano)
