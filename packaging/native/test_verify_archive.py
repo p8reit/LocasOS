@@ -17,6 +17,7 @@ class ArchiveTests(unittest.TestCase):
         with tarfile.open(path, "w") as tf:
             for name in sorted(module.ALLOWED_FILES):
                 item = tarfile.TarInfo(name)
+                item.mode = 0o755 if name.startswith(("opt/locas/bin/", "usr/local/sbin/")) else 0o644
                 item.size = 1
                 tf.addfile(item, io.BytesIO(b"x"))
             if malicious is not None:

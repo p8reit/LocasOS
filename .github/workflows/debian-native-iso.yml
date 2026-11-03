@@ -79,3 +79,50 @@ jobs:
             dist/debian/locasos-native-developer-amd64.iso.sha256
             dist/debian/boot-report.txt
           retention-days: 3
+
+  vm-install:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified developer ISO
+        uses: actions/download-artifact@v4
+        with:
+          name: locasos-debian-native-developer-iso
+          path: dist/debian
+      - name: Install QEMU acceptance tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf
+      - name: Verify exact CI ISO bytes
+        run: (cd dist/debian && sha256sum -c locasos-native-developer-amd64.iso.sha256)
+      - name: Install onto disposable QEMU disk, then boot without ISO
+        shell: bash
+        timeout-minutes: 40
+        run: |
+          set -Eeuo pipefail
+          code=
+          vars=
+          for pair in "OVMF_CODE_4M.fd OVMF_VARS_4M.fd" "OVMF_CODE.fd OVMF_VARS.fd"; do
+            read -r code_name vars_name <<< "$pair"
+            if [[ -f "/usr/share/OVMF/$code_name" && -f "/usr/share/OVMF/$vars_name" ]]; then
+              code="/usr/share/OVMF/$code_name"
+              vars="/usr/share/OVMF/$vars_name"
+              break
+            fi
+          done
+          [[ -n "$code" && -n "$vars" ]] || { echo "No matching OVMF_CODE/VARS firmware pair" >&2; exit 1; }
+          digest="$(awk 'NR==1 {print $1}' dist/debian/locasos-native-developer-amd64.iso.sha256)"
+          mkdir -p dist/debian/vm-logs
+          python3 packaging/debian/installer/verify_native_vm_install.py \
+            --iso dist/debian/locasos-native-developer-amd64.iso \
+            --sha256 "$digest" --ovmf-code "$code" --ovmf-vars "$vars" \
+            --live-timeout 480 --install-timeout 900 --boot-timeout 480 \
+            --log-dir dist/debian/vm-logs
+      - name: Publish QEMU serial diagnostics on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: locasos-native-disposable-two-boot-logs
+          path: dist/debian/vm-logs/
+          if-no-files-found: ignore
+          retention-days: 5

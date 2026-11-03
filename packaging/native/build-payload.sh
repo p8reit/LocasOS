@@ -16,7 +16,12 @@ fi
 go build -trimpath -ldflags="-s -w -X main.trustedPublicKeyBase64=${LOCAS_UPDATE_PUBLIC_KEY_B64}" -o build/locas-updater ./cmd/locas-updater
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
-mkdir -p "$stage/opt/locas/bin" "$stage/usr/local/sbin" "$stage/etc/systemd/system"
+# Artifact directory permissions must allow unprivileged service accounts to
+# traverse all ancestors. umask 027 would otherwise make /opt/locas mode 0750
+# and cause systemd 203/EXEC (EACCES) for locas-core/agent in the live guest.
+install -d -m 0755 "$stage/opt" "$stage/opt/locas" "$stage/opt/locas/bin" \
+  "$stage/usr" "$stage/usr/local" "$stage/usr/local/sbin" \
+  "$stage/etc" "$stage/etc/systemd" "$stage/etc/systemd/system"
 install -m 0755 build/locas-core build/locas-agent build/locas-updater "$stage/opt/locas/bin/"
 for f in firstboot.sh locas-app-worker.sh install-ollama.sh install-open-webui.sh repair-ollama.sh upgrade-locas.sh; do
   case "$f" in
