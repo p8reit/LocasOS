@@ -30,7 +30,7 @@ jobs:
           # Export only the public half. Developer/CI builds remain untrusted.
           public_key="$(go run ./cmd/locas-release public-key)"
           test -n "$public_key"
-          printf 'LOCAS_UPDATE_PUBLIC_KEY_B64=%s\\n' "$public_key" >> "$GITHUB_ENV"
+          printf 'LOCAS_UPDATE_PUBLIC_KEY_B64=%s\n' "$public_key" >> "$GITHUB_ENV"
       - name: Build update bundle
         run: bash packaging/wsl/build-rootfs.sh
       - name: Stage identical user-facing upgrade scripts

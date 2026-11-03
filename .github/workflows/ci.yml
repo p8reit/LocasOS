@@ -25,7 +25,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Shell syntax
         run: |
-          find scripts -type f -name '*.sh' -print0 2>/dev/null | xargs -0 -r -n1 bash -n
+          find scripts packaging/wsl -type f -name '*.sh' -print0 2>/dev/null | xargs -0 -r -n1 bash -n
+  dashboard:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Embedded dashboard update selection
+        run: node --test tests/*.test.cjs
   documentation:
     runs-on: ubuntu-24.04
     steps:

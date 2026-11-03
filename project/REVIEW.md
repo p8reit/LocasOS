@@ -41,3 +41,7 @@ Root README now links current project memory. Historical backlog/sprint, release
 ## Follow-up: R01 installer repair
 
 The malformed duplicated block in `install-ollama.sh` was removed, its runner path expression restored and post-extraction executable checks extended to include the runner. All nine shell scripts now pass `bash -n`; six manifest fixtures exercised the actual validation block successfully. R01 is repaired at source level, pending clean WSL installation/inference evidence and review. Other findings remain open. No privileged installation was run.
+
+## Follow-up: update activation and selection — 2026-11-03
+
+R02 corrected at source and exact printf output tested; official signed artifact validation remains pending. R03 starts the update watcher during upgrade, pending target validation. R09 clears selection on channel changes and rejects stale check responses; four Node regression tests pass. UI manual-only/signature copy now describes the independent worker and preview limits. Release qualification, version policy and public API metadata copy still require follow-up.
