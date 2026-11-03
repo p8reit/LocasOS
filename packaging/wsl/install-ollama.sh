@@ -26,22 +26,13 @@ if ! grep -Eq '^(\./)?bin/ollama$' "$work/contents.txt"; then
   head -n 15 "$work/contents.txt" >&2
   exit 1
 fi
-if ! grep -Eq '^(\\./)?lib/ollama/llama-server
-if [[ ! -x /usr/local/bin/ollama ]]; then
-  echo "Ollama binary missing after extraction" >&2
-  exit 1
-fi
-systemctl daemon-reload
-systemctl enable --now locas-ollama.service
-systemctl is-active --quiet locas-ollama.service
-echo "Installed isolated Ollama runtime. Live archive download is not checksum-pinned."
- "$work/contents.txt"; then
+if ! grep -Eq '^(\./)?lib/ollama/llama-server$' "$work/contents.txt"; then
   echo "Official Ollama archive missing required llama-server; aborting installation" >&2
   exit 1
 fi
 tar --zstd -xf "$work/ollama.tar.zst" -C /usr/local
-if [[ ! -x /usr/local/bin/ollama ]]; then
-  echo "Ollama binary missing after extraction" >&2
+if [[ ! -x /usr/local/bin/ollama || ! -x /usr/local/lib/ollama/llama-server ]]; then
+  echo "Ollama binary or required runner missing after extraction" >&2
   exit 1
 fi
 systemctl daemon-reload
