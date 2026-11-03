@@ -16,8 +16,8 @@ import (
 	"github.com/p8reit/LocasOS/internal/admin"
 	"github.com/p8reit/LocasOS/internal/agentclient"
 	"github.com/p8reit/LocasOS/internal/server"
-	"github.com/p8reit/LocasOS/internal/updatetrust"
 	"github.com/p8reit/LocasOS/internal/updateprefs"
+	"github.com/p8reit/LocasOS/internal/updatetrust"
 )
 
 //go:embed index.html
