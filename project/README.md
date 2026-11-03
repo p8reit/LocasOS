@@ -2,7 +2,7 @@
 
 Reviewed 2026-11-02 against checkout `9f2aabe`. Status describes source evidence, not deployment certification.
 
-LOCAS OS is a local-first headless AI appliance. The current delivery is a dedicated Ubuntu 24.04 WSL2 distro with Go services and an embedded browser dashboard. The original architecture also proposes React and SQLite; neither is the shipped runtime foundation today.
+LOCAS OS is a local-first headless AI appliance. At integration with `4c8feb5`, the source targets Debian 13 WSL delivery and a separate developer-only Debian native live ISO. The original November 2 review below describes the earlier Ubuntu checkout. See [integration checkpoint](INTEGRATION-LOS-118.md) and current deployment/native documents before acting on historical statuses. Go services and an embedded dashboard remain implemented. The original architecture also proposes React and SQLite; neither is the shipped runtime foundation today.
 
 Start here, then read only the feature files relevant to the task. [Review](REVIEW.md) contains findings and verification limits; [phases](PHASES.md) describes sequencing; [parallel work](PARALLEL_WORK.md) defines coordination. [Agent policy](AGENT_POLICY.md) remains authoritative for agent execution.
 

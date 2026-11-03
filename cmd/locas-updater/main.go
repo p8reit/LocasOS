@@ -108,6 +108,9 @@ func run() error {
 	if err != nil || len(key) != ed25519.PublicKeySize {
 		return fail(errors.New("trusted publisher key not configured; update blocked"))
 	}
+	if err := refuseDowngrade(filepath.Join(stateDir, "current-version"), req.Version); err != nil {
+		return fail(err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	client := &http.Client{
@@ -132,7 +135,7 @@ func run() error {
 	if err := json.Unmarshal(metadata, &rel); err != nil {
 		return fail(err)
 	}
-	if rel.Tag != req.Version || rel.Draft || rel.Prerelease != (req.Channel == "beta") {
+	if !releaseAllowed(rel, req) {
 		return fail(errors.New("release channel or identity does not match approval"))
 	}
 	known := map[string]asset{}
@@ -158,14 +161,11 @@ func run() error {
 	setStatus(status{State: "downloading", Version: req.Version, Channel: req.Channel})
 	for _, name := range []string{"locasos-update.json", "locasos-update.sig", "locasos-upgrade-amd64.tar"} {
 		item := known[name]
-		max := item.Size + 1
-		if name == "locasos-update.json" && max > 4096 {
-			max = 4096
+		if (name == "locasos-update.json" && item.Size > 4096) ||
+			(name == "locasos-update.sig" && item.Size != ed25519.SignatureSize) {
+			return fail(fmt.Errorf("unexpected signed metadata size for %s", name))
 		}
-		if name == "locasos-update.sig" && max > ed25519.SignatureSize {
-			max = ed25519.SignatureSize
-		}
-		if err := download(ctx, client, item.URL, filepath.Join(work, name), max); err != nil {
+		if err := download(ctx, client, item.URL, filepath.Join(work, name), item.Size); err != nil {
 			return fail(err)
 		}
 	}
@@ -196,6 +196,9 @@ func run() error {
 	if err := validateArchive(archive); err != nil {
 		return fail(err)
 	}
+	if err := checkReleaseOSBase(archive, "/etc/os-release"); err != nil {
+		return fail(err)
+	}
 	sidecar := filepath.Join(work, "locasos-upgrade-amd64.tar.sha256")
 	if err := os.WriteFile(sidecar, []byte(digest+"  locasos-upgrade-amd64.tar\n"), 0600); err != nil {
 		return fail(err)
@@ -212,6 +215,13 @@ func run() error {
 	}
 	setStatus(status{State: "installed", Version: req.Version, Channel: req.Channel, Message: "Health-checked upgrade completed"})
 	return nil
+}
+
+// Stable permits only published non-prereleases. Early Access permits both
+// prereleases and those same builds after promotion to Stable.
+func releaseAllowed(rel release, req request) bool {
+	return rel.Tag == req.Version && !rel.Draft &&
+		(req.Channel == "beta" || (req.Channel == "stable" && !rel.Prerelease))
 }
 
 func fetch(ctx context.Context, client *http.Client, url string, max int64) ([]byte, error) {
@@ -238,12 +248,71 @@ func fetch(ctx context.Context, client *http.Client, url string, max int64) ([]b
 	return out, nil
 }
 
-func download(ctx context.Context, client *http.Client, url, destination string, max int64) error {
-	content, err := fetch(ctx, client, url, max)
+// download streams a bounded asset into a private temporary file. A partial or
+// oversized HTTP response is never exposed at the final staging path.
+func download(ctx context.Context, client *http.Client, url, destination string, expectedSize int64) error {
+	if expectedSize <= 0 || expectedSize > 512*1024*1024 {
+		return errors.New("invalid release asset size")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(destination, content, 0600)
+	req.Header.Set("User-Agent", "LOCAS-OS-signed-updater")
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("release download returned HTTP %d", res.StatusCode)
+	}
+	if res.ContentLength >= 0 && res.ContentLength != expectedSize {
+		return errors.New("release asset Content-Length mismatch")
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(destination), ".locas-download-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+	written, err := io.Copy(tmp, io.LimitReader(res.Body, expectedSize+1))
+	if err != nil {
+		return fmt.Errorf("release transfer interrupted: %w", err)
+	}
+	if written != expectedSize {
+		return fmt.Errorf("release asset size mismatch: expected %d, received %d", expectedSize, written)
+	}
+	if err := tmp.Sync(); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), destination)
+}
+
+// refuseDowngrade uses the last successfully installed signed release version.
+// An existing version with invalid provenance fails closed; a legacy appliance
+// without a version file can still receive its first signed update.
+func refuseDowngrade(versionFile, nextVersion string) error {
+	data, err := os.ReadFile(versionFile)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("cannot determine installed version: %w", err)
+	}
+	installed := strings.TrimSpace(string(data))
+	cmp, err := updatetrust.CompareVersions(nextVersion, installed)
+	if err != nil {
+		return fmt.Errorf("invalid installed update version: %w", err)
+	}
+	if cmp < 0 {
+		return fmt.Errorf("refusing automatic downgrade from %s to %s", installed, nextVersion)
+	}
+	return nil
 }
 
 func validateArchive(filename string) error {
@@ -299,4 +368,58 @@ func setStatus(s status) {
 	_ = tmp.Chmod(0644)
 	_ = tmp.Close()
 	_ = os.Rename(tmp.Name(), filepath.Join(stateDir, "status.json"))
+}
+
+// checkReleaseOSBase stops distro-crossing upgrades BEFORE invoking the
+// on-disk shell installer. The signed bundle must carry an OS identity marker.
+func checkReleaseOSBase(archive, osRelease string) error {
+	file, err := os.Open(archive)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	reader := tar.NewReader(file)
+	var target string
+	for {
+		header, nextErr := reader.Next()
+		if errors.Is(nextErr, io.EOF) {
+			break
+		}
+		if nextErr != nil {
+			return nextErr
+		}
+		if strings.TrimPrefix(header.Name, "./") != "opt/locas/bin/locas-os-base" {
+			continue
+		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			return errors.New("invalid release OS marker type")
+		}
+		if header.Size > 64 {
+			return errors.New("release OS marker too large")
+		}
+		data, readErr := io.ReadAll(io.LimitReader(reader, 65))
+		if readErr != nil {
+			return readErr
+		}
+		target = strings.TrimSpace(string(data))
+		break
+	}
+	body, err := os.ReadFile(osRelease)
+	if err != nil {
+		return err
+	}
+	var id, version string
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.HasPrefix(line, "ID=") {
+			id = strings.Trim(strings.TrimPrefix(line, "ID="), "\"")
+		}
+		if strings.HasPrefix(line, "VERSION_ID=") {
+			version = strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), "\"")
+		}
+	}
+	current := id + ":" + version
+	if id == "" || version == "" || target != current {
+		return fmt.Errorf("blocked incompatible OS application update: installed=%s target=%s; use an explicitly verified distro migration", current, target)
+	}
+	return nil
 }

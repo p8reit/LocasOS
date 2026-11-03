@@ -12,7 +12,7 @@ import (
 	"github.com/p8reit/LocasOS/internal/updatetrust"
 )
 
-func TestVerifyBundle(t *testing.T) {
+func TestVerifyApprovedBundle(t *testing.T) {
 	for _, scenario := range []string{"valid", "tampered manifest", "tampered archive", "wrong key", "wrong version", "wrong commit", "oversized manifest", "oversized signature", "missing archive"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir := t.TempDir()
@@ -65,7 +65,7 @@ func TestVerifyBundle(t *testing.T) {
 			}
 			write("locasos-update.json", payload)
 			write("locasos-update.sig", sig)
-			err = verifyBundle(version, commit, dir, pub)
+			err = verifyApprovedBundle(version, commit, dir, pub)
 			if (err == nil) != (scenario == "valid") {
 				t.Fatalf("unexpected result: %v", err)
 			}

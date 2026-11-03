@@ -16,11 +16,15 @@ import (
 	"github.com/p8reit/LocasOS/internal/admin"
 	"github.com/p8reit/LocasOS/internal/agentclient"
 	"github.com/p8reit/LocasOS/internal/server"
+	"github.com/p8reit/LocasOS/internal/updateprefs"
 	"github.com/p8reit/LocasOS/internal/updatetrust"
 )
 
 //go:embed index.html
 var landingPage []byte
+
+//go:embed brand-icon.webp
+var brandIcon []byte
 
 // Assigned at build time using -ldflags; development binaries identify their provenance.
 var buildVersion = "dev"
@@ -45,12 +49,18 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", server.NewHandler("locas-core"))
+	mux.HandleFunc("GET /brand/icon.webp", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/webp")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, _ = w.Write(brandIcon)
+	})
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
 		_, _ = w.Write(landingPage)
 	})
 	mux.HandleFunc("GET /api/updates", func(w http.ResponseWriter, r *http.Request) {
@@ -58,12 +68,41 @@ func main() {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
+		channel, err := updateprefs.Load(stateDir)
+		if err != nil {
+			log.Printf("update preference invalid; defaulting to stable: %v", err)
+		}
 		sendJSON(w, http.StatusOK, map[string]string{
 			"installed_version": buildVersion,
+			"channel":           channel,
 			"availability":      "not_checked",
-			"update_method":     "verified_local_bundle",
-			"message":           "Automatic release discovery and dashboard application are not enabled yet. Apply a downloaded, checksummed LOCAS OS upgrade package with Upgrade-LocasOS.ps1.",
+			"update_method":     "signed_github_release",
+			"message":           "Check published Stable or Early Access releases. Installing requires a signed package and administrator approval.",
 		})
+	})
+	mux.HandleFunc("POST /api/updates/channel", func(w http.ResponseWriter, r *http.Request) {
+		if !admins.Authenticated(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		if !admin.SafeMutation(r) {
+			http.Error(w, "invalid request", http.StatusForbidden)
+			return
+		}
+		var selection struct {
+			Channel string `json:"channel"`
+		}
+		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&selection); err != nil || !updateprefs.ValidChannel(selection.Channel) {
+			http.Error(w, "unsupported update channel", http.StatusBadRequest)
+			return
+		}
+		if err := updateprefs.Save(stateDir, selection.Channel); err != nil {
+			http.Error(w, "cannot save update channel", http.StatusInternalServerError)
+			return
+		}
+		sendJSON(w, http.StatusOK, map[string]string{"channel": selection.Channel})
 	})
 	mux.HandleFunc("GET /api/updates/status", func(w http.ResponseWriter, r *http.Request) {
 		if !admins.Authenticated(r) {
@@ -96,6 +135,11 @@ func main() {
 			http.Error(w, "unsupported update selection", http.StatusBadRequest)
 			return
 		}
+		selectedChannel, err := updateprefs.Load(stateDir)
+		if err != nil || selectedChannel != request.Channel {
+			http.Error(w, "select and save the desired update channel first", http.StatusConflict)
+			return
+		}
 		data, _ := json.Marshal(request)
 		appProxy(w, r, socket, http.MethodPost, "/internal/updates/install", data)
 	})
@@ -106,7 +150,7 @@ func main() {
 		}
 		channel := r.URL.Query().Get("channel")
 		if channel == "" {
-			channel = "stable"
+			channel, _ = updateprefs.Load(stateDir)
 		}
 		if channel != "stable" && channel != "beta" {
 			http.Error(w, "unsupported update channel", http.StatusBadRequest)

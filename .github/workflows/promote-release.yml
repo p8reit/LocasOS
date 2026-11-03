@@ -26,6 +26,7 @@ jobs:
           VERSION: ${{ inputs.version }}
           LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
         run: |
+          set -Eeuo pipefail
           [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid version tag' >&2; exit 1; }
           test -n "$LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64" || { echo 'Pinned publisher verification key missing. Promotion blocked.' >&2; exit 1; }
           current="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$VERSION")"

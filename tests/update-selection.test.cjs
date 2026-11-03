@@ -36,7 +36,8 @@ function respond(call, channel='stable') {
 test('changing channel clears an approved selection and package links', async () => {
   const d = dashboard(); const check = d.run('checkUpdates()'); respond(d.pending[0]); await check;
   assert.equal(d.element('installupdate').disabled, false);
-  d.element('updatechannel').value = 'beta'; d.element('updatechannel').listeners.change();
+  d.element('updatechannel').value = 'beta'; const saving = d.element('updatechannel').listeners.change();
+  d.pending.at(-1).resolve({ok:true,json:async()=>({})}); await saving;
   assert.equal(d.run('selectedUpdate'), null);
   assert.equal(d.element('installupdate').disabled, true);
   assert.equal(d.element('releaselink').children.length, 0);
@@ -44,16 +45,18 @@ test('changing channel clears an approved selection and package links', async ()
 });
 test('late response from old channel cannot replace newer result', async () => {
   const d = dashboard(); const first = d.run('checkUpdates()');
-  d.element('updatechannel').value = 'beta'; d.element('updatechannel').listeners.change();
-  const second = d.run('checkUpdates()'); respond(d.pending[1], 'beta'); await second;
+  d.element('updatechannel').value = 'beta'; const saving = d.element('updatechannel').listeners.change();
+  d.pending.at(-1).resolve({ok:true,json:async()=>({})}); await saving;
+  const second = d.run('checkUpdates()'); respond(d.pending[2], 'beta'); await second;
   respond(d.pending[0]); await first;
   assert.equal(d.run('selectedUpdate.channel'), 'beta');
   assert.equal(d.element('installupdate').disabled, false);
 });
 test('old failure cannot overwrite current channel result', async () => {
   const d = dashboard(); const first = d.run('checkUpdates()');
-  d.element('updatechannel').value = 'beta'; d.element('updatechannel').listeners.change();
-  const second = d.run('checkUpdates()'); respond(d.pending[1], 'beta'); await second;
+  d.element('updatechannel').value = 'beta'; const saving = d.element('updatechannel').listeners.change();
+  d.pending.at(-1).resolve({ok:true,json:async()=>({})}); await saving;
+  const second = d.run('checkUpdates()'); respond(d.pending[2], 'beta'); await second;
   d.pending[0].reject(Error('old network error')); await first;
   assert.equal(d.element('updateerror').textContent, '');
   assert.equal(d.run('selectedUpdate.channel'), 'beta');

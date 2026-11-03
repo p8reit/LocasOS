@@ -67,6 +67,15 @@ if ($LASTEXITCODE -ne 0) {
     Write-Warning "First boot failed. The imported distro was preserved for diagnostics."
     throw "Run packaging/wsl/diagnose.ps1 to inspect logs. No automatic deletion was performed."
 }
+# Freshly imported WSL instances may complete firstboot without activating the
+# already-enabled application units. Start them explicitly in dependency order.
+foreach ($service in @("locas-agent.service", "locas-core.service")) {
+    & $wsl.Source -d $DistributionName -u root -- systemctl start $service
+    if ($LASTEXITCODE -ne 0) {
+        & $wsl.Source -d $DistributionName -u root -- systemctl --no-pager status $service
+        throw "Failed to activate $service after first boot; imported distro preserved."
+    }
+}
 # systemd service startup is asynchronous in WSL; tolerate scheduling delays.
 $healthy = $false
 for ($attempt = 1; $attempt -le 30; $attempt++) {

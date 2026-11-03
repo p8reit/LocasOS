@@ -51,3 +51,29 @@ func TestArchiveAllowlist(t *testing.T) {
 		}
 	}
 }
+
+func TestApprovedReleaseChannelAfterPromotion(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		channel    string
+		prerelease bool
+		draft      bool
+		tag        string
+		want       bool
+	}{
+		{"beta initially prerelease", "beta", true, false, "v0.10.0", true},
+		{"beta promoted stable", "beta", false, false, "v0.10.0", true},
+		{"stable published", "stable", false, false, "v0.10.0", true},
+		{"stable cannot install prerelease", "stable", true, false, "v0.10.0", false},
+		{"draft forbidden", "beta", true, true, "v0.10.0", false},
+		{"other tag forbidden", "beta", true, false, "v0.10.1", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := releaseAllowed(release{Tag: tc.tag, Draft: tc.draft, Prerelease: tc.prerelease},
+				request{Channel: tc.channel, Version: "v0.10.0"})
+			if got != tc.want {
+				t.Fatalf("releaseAllowed=%v, want %v", got, tc.want)
+			}
+		})
+	}
+}

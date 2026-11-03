@@ -30,7 +30,7 @@ func readBounded(filename string, max int64) ([]byte, error) {
 
 // verifyBundle uses a separately provisioned publisher key, never a release asset.
 // It authenticates original manifest bytes and the exact archive before promotion.
-func verifyBundle(version, commit, dir string, key ed25519.PublicKey) error {
+func verifyApprovedBundle(version, commit, dir string, key ed25519.PublicKey) error {
 	manifest, err := readBounded(filepath.Join(dir, "locasos-update.json"), 4096)
 	if err != nil {
 		return err

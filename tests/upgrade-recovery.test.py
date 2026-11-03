@@ -29,6 +29,7 @@ class UpgradeTest(unittest.TestCase):
         self.root = self.base / 'root'
         for name in ['run', 'var/lib', 'opt/locas/bin', 'etc/systemd/system', 'usr/local/sbin']:
             (self.root / name).mkdir(parents=True, exist_ok=True)
+        (self.root/'etc/os-release').write_text('ID=debian\nVERSION_ID=13\n')
         self.original = {CORE: b'old-core', AGENT: b'old-agent', SCRIPT: b'old-upgrade', UNIT: b'old-unit'}
         for name, data in self.original.items():
             p = self.root / name
@@ -71,7 +72,7 @@ exit 0''')
 
     def bundle(self, extras=None, link=None):
         self.archive = self.base / 'update.tar'
-        self.payload = {CORE: b'new-core', AGENT: b'new-agent', SCRIPT: b'new-upgrade', UNIT: b'new-unit', NEW: b'new-worker'}
+        self.payload = {'opt/locas/bin/locas-os-base': b'debian:13', CORE: b'new-core', AGENT: b'new-agent', SCRIPT: b'new-upgrade', UNIT: b'new-unit', NEW: b'new-worker'}
         self.payload.update(extras or {})
         with tarfile.open(self.archive, 'w') as archive:
             for name, data in self.payload.items():
@@ -103,7 +104,8 @@ exit 0''')
         self.assertEqual(result.returncode, 0, result.stderr)
         for name, data in self.payload.items():
             self.assertEqual((self.root/name).read_bytes(), data)
-        self.assertIn('enable --now locas-app-worker.path locas-update-worker.path', (self.base/'calls').read_text())
+        self.assertIn('enable --now locas-app-worker.path', (self.base/'calls').read_text())
+        self.assertIn('enable --now locas-update-worker.path', (self.base/'calls').read_text())
         self.assertEqual(self.data.read_bytes(), b'valuable-model')
 
     def test_restart_failure_restores_scripts_units_and_removes_new_files(self):
@@ -152,6 +154,13 @@ exit 0''')
         result = self.run_upgrade(FAIL_INSTALL='1')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('restoring all replaced', result.stderr)
+        self.assert_restored()
+
+    def test_cross_distribution_upgrade_rejected(self):
+        self.bundle({'opt/locas/bin/locas-os-base': b'ubuntu:24.04'})
+        result = self.run_upgrade()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Blocked cross-distribution', result.stderr)
         self.assert_restored()
 
     def test_checksum_must_name_the_archive(self):

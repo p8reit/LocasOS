@@ -41,7 +41,7 @@ main() {
     seen["$member"]=1
     case "$member" in
       opt|opt/locas|opt/locas/bin|etc|etc/systemd|etc/systemd/system|usr|usr/local|usr/local/sbin) ;;
-      opt/locas/bin/locas-core|opt/locas/bin/locas-agent|opt/locas/bin/locas-updater|\
+      opt/locas/bin/locas-core|opt/locas/bin/locas-agent|opt/locas/bin/locas-updater|opt/locas/bin/locas-os-base|\
       etc/systemd/system/locas-core.service|etc/systemd/system/locas-agent.service|\
       etc/systemd/system/locas-app-worker.path|etc/systemd/system/locas-app-worker.service|\
       etc/systemd/system/locas-update-worker.path|etc/systemd/system/locas-update-worker.service|\
@@ -67,6 +67,12 @@ main() {
     done
     [[ ! -e "$root/$member" || -f "$root/$member" ]] || { echo "Invalid destination type" >&2; exit 1; }
   done
+  identity="$(cat "$work/staging/opt/locas/bin/locas-os-base" 2>/dev/null || true)"
+  source_os="$(. "$root/etc/os-release"; printf '%s:%s' "$ID" "$VERSION_ID")"
+  if [[ -z "$identity" || "$identity" != "$source_os" ]]; then
+    echo "Blocked cross-distribution LocasOS upgrade: installed=$source_os package=${identity:-unknown}" >&2
+    exit 1
+  fi
   backup_dir="$root/var/lib/locas-upgrades"
   install -d -m 0700 -o root -g root "$backup_dir"
   backup="$(mktemp -d "$backup_dir/preupgrade-XXXXXXXX")"
@@ -142,7 +148,7 @@ main() {
     install -m "$mode" "$work/staging/$member" "$root/$member"
   done
   systemctl daemon-reload
-  systemctl enable --now "${workers[@]}"
+  for unit in "${workers[@]}"; do systemctl enable --now "$unit"; done
   systemctl restart locas-agent.service
   systemctl restart locas-core.service
   ready=false

@@ -26,28 +26,74 @@ jobs:
       - name: Pin publisher verification key in official updater
         env:
           LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64: ${{ secrets.LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64 }}
+          PINNED_PUBLIC_KEY: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
         run: |
-          # Export only the public half. Developer/CI builds remain untrusted.
+          # Provision the public key once in repository variables, private key only in
+          # the protected release environment. Fail if they ever diverge.
           public_key="$(go run ./cmd/locas-release public-key)"
-          test -n "$public_key"
+          test -n "$PINNED_PUBLIC_KEY" && test "$public_key" = "$PINNED_PUBLIC_KEY" ||
+            { echo 'Release publisher public key missing or does not match protected signing key' >&2; exit 1; }
           printf 'LOCAS_UPDATE_PUBLIC_KEY_B64=%s\n' "$public_key" >> "$GITHUB_ENV"
       - name: Build update bundle
         run: bash packaging/wsl/build-rootfs.sh
       - name: Stage identical user-facing upgrade scripts
         run: |
           cp packaging/wsl/Upgrade-LocasOS.ps1 dist/
+          cp packaging/wsl/Install-LocasOS.ps1 dist/
+          cp packaging/wsl/Enable-LocasOS-Autostart.ps1 dist/
+          cp packaging/wsl/Repair-LocasOS-Autostart.ps1 dist/
+          cp packaging/wsl/Keep-LocasOS-Running.ps1 dist/
+          cp packaging/wsl/Test-LocasOS.ps1 dist/
+          cp packaging/wsl/Install-Release-LocasOS.ps1 dist/
+          cp packaging/wsl/Install-LocasOS-WSL.ps1 dist/
           cp packaging/wsl/upgrade-locas.sh dist/
+          cp packaging/wsl/Backup-LocasOS-ForDebian.ps1 dist/
+          cp packaging/wsl/Test-DebianWSL-Release.ps1 dist/
           bash -n dist/upgrade-locas.sh
       - name: Sign exact update archive manifest
         env:
           LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64: ${{ secrets.LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64 }}
         run: |
           go run ./cmd/locas-release sign "$GITHUB_REF_NAME" "$GITHUB_SHA" dist
+      - name: Sign fresh-install rootfs and build pinned Windows verifier
+        env:
+          LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64: ${{ secrets.LOCAS_RELEASE_ED25519_PRIVATE_KEY_B64 }}
+        run: |
+          go run ./cmd/locas-release sign-install "$GITHUB_REF_NAME" "$GITHUB_SHA" dist
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.installPublicKeyBase64=$LOCAS_UPDATE_PUBLIC_KEY_B64" -o dist/locasos-verify-install.exe ./cmd/locas-release
+      - name: Independently verify fresh-install signature
+        env:
+          LOCAS_UPDATE_PUBLIC_KEY_B64: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
+        run: |
+          go run ./cmd/locas-release verify-install "$GITHUB_REF_NAME" dist
+          (cd dist && sha256sum -c locasos-wsl-amd64.tar.sha256)
+      - name: Independently verify signed release before publishing
+        env:
+          LOCAS_UPDATE_PUBLIC_KEY_B64: ${{ vars.LOCAS_RELEASE_ED25519_PUBLIC_KEY_B64 }}
+        run: go run ./cmd/locas-release verify "$GITHUB_REF_NAME" dist
       - name: Validate package contents
         run: |
           (cd dist && sha256sum -c locasos-upgrade-amd64.tar.sha256)
           tar -tf dist/locasos-upgrade-amd64.tar > dist/upgrade-members.txt
           if grep -Eq '^([.]/?)$|(^/|(^|/)\.\.(/|$))' dist/upgrade-members.txt; then exit 1; fi
+      - name: WSL release inventory preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            locasos-wsl-amd64.tar locasos-wsl-amd64.tar.sha256
+            locasos-install.json locasos-install.sig locasos-verify-install.exe
+            Install-Release-LocasOS.ps1 Install-LocasOS-WSL.ps1 Install-LocasOS.ps1
+            Enable-LocasOS-Autostart.ps1 Repair-LocasOS-Autostart.ps1
+            Keep-LocasOS-Running.ps1 Test-LocasOS.ps1
+            locasos-upgrade-amd64.tar locasos-upgrade-amd64.tar.sha256
+            locasos-update.json locasos-update.sig
+            Upgrade-LocasOS.ps1 upgrade-locas.sh
+            Backup-LocasOS-ForDebian.ps1 Test-DebianWSL-Release.ps1
+          )
+          for asset in "${required[@]}"; do
+            test -s "dist/$asset" || { echo "::error::Missing or empty release artifact $asset"; exit 1; }
+          done
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,10 +101,34 @@ jobs:
           # New releases ALWAYS start as prereleases for real-device testing.
           # Promote the SAME tag/assets to stable using the separate reviewed step.
           gh release create "$GITHUB_REF_NAME" \
+            dist/locasos-wsl-amd64.tar \
+            dist/locasos-wsl-amd64.tar.sha256 \
+            dist/locasos-install.json \
+            dist/locasos-install.sig \
+            dist/locasos-verify-install.exe \
+            dist/Install-Release-LocasOS.ps1 \
+            dist/Install-LocasOS-WSL.ps1 \
+            dist/Install-LocasOS.ps1 \
+            dist/Enable-LocasOS-Autostart.ps1 \
+            dist/Repair-LocasOS-Autostart.ps1 \
+            dist/Keep-LocasOS-Running.ps1 \
+            dist/Test-LocasOS.ps1 \
             dist/locasos-upgrade-amd64.tar \
             dist/locasos-upgrade-amd64.tar.sha256 \
             dist/locasos-update.json \
             dist/locasos-update.sig \
             dist/Upgrade-LocasOS.ps1 \
             dist/upgrade-locas.sh \
+            dist/Backup-LocasOS-ForDebian.ps1 \
+            dist/Test-DebianWSL-Release.ps1 \
             --verify-tag --generate-notes --prerelease
+      - name: Verify published WSL release asset inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' > /tmp/published-assets.txt
+          for asset in locasos-wsl-amd64.tar locasos-wsl-amd64.tar.sha256 locasos-install.json locasos-install.sig locasos-verify-install.exe Install-Release-LocasOS.ps1 Install-LocasOS-WSL.ps1 Install-LocasOS.ps1 Enable-LocasOS-Autostart.ps1 Repair-LocasOS-Autostart.ps1 Keep-LocasOS-Running.ps1 Test-LocasOS.ps1; do
+            grep -Fxq "$asset" /tmp/published-assets.txt || { echo "::error::Published release missing $asset"; exit 1; }
+          done
