@@ -1,3 +1,5 @@
+> Review notice (2026-11-02): This document includes historical plans or implementation claims that predate checkout `9f2aabe`. Consult the [current feature and phase map](../../project/README.md) for reviewed status, remaining work and guardrails. Existing release/security requirements still apply; this notice does not certify them as satisfied.
+
 # Agent IPC Contract — Proposed
 
 The unprivileged core communicates with the host agent over a root/locas-group controlled Unix socket. Socket permissions do not replace peer credential verification. No arbitrary shell/command RPC is permitted.

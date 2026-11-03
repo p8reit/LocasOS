@@ -1,3 +1,5 @@
+> Review notice (2026-11-02): This document includes historical plans or implementation claims that predate checkout `9f2aabe`. Consult the [current feature and phase map](../../project/README.md) for reviewed status, remaining work and guardrails. Existing release/security requirements still apply; this notice does not certify them as satisfied.
+
 # LOCAS OS WSL2 appliance — build preview
 
 This branch contains a **buildable development rootfs**, a checksum-verified WSL importer and Linux systemd provisioning units. This is **not yet a public release** and not production hardened.
