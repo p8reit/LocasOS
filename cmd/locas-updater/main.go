@@ -108,6 +108,9 @@ func run() error {
 	if err != nil || len(key) != ed25519.PublicKeySize {
 		return fail(errors.New("trusted publisher key not configured; update blocked"))
 	}
+	if err := refuseDowngrade(filepath.Join(stateDir, "current-version"), req.Version); err != nil {
+		return fail(err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	client := &http.Client{
@@ -158,14 +161,11 @@ func run() error {
 	setStatus(status{State: "downloading", Version: req.Version, Channel: req.Channel})
 	for _, name := range []string{"locasos-update.json", "locasos-update.sig", "locasos-upgrade-amd64.tar"} {
 		item := known[name]
-		max := item.Size + 1
-		if name == "locasos-update.json" && max > 4096 {
-			max = 4096
+		if (name == "locasos-update.json" && item.Size > 4096) ||
+			(name == "locasos-update.sig" && item.Size != ed25519.SignatureSize) {
+			return fail(fmt.Errorf("unexpected signed metadata size for %s", name))
 		}
-		if name == "locasos-update.sig" && max > ed25519.SignatureSize {
-			max = ed25519.SignatureSize
-		}
-		if err := download(ctx, client, item.URL, filepath.Join(work, name), max); err != nil {
+		if err := download(ctx, client, item.URL, filepath.Join(work, name), item.Size); err != nil {
 			return fail(err)
 		}
 	}
@@ -248,12 +248,71 @@ func fetch(ctx context.Context, client *http.Client, url string, max int64) ([]b
 	return out, nil
 }
 
-func download(ctx context.Context, client *http.Client, url, destination string, max int64) error {
-	content, err := fetch(ctx, client, url, max)
+// download streams a bounded asset into a private temporary file. A partial or
+// oversized HTTP response is never exposed at the final staging path.
+func download(ctx context.Context, client *http.Client, url, destination string, expectedSize int64) error {
+	if expectedSize <= 0 || expectedSize > 512*1024*1024 {
+		return errors.New("invalid release asset size")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(destination, content, 0600)
+	req.Header.Set("User-Agent", "LOCAS-OS-signed-updater")
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("release download returned HTTP %d", res.StatusCode)
+	}
+	if res.ContentLength >= 0 && res.ContentLength != expectedSize {
+		return errors.New("release asset Content-Length mismatch")
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(destination), ".locas-download-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+	written, err := io.Copy(tmp, io.LimitReader(res.Body, expectedSize+1))
+	if err != nil {
+		return fmt.Errorf("release transfer interrupted: %w", err)
+	}
+	if written != expectedSize {
+		return fmt.Errorf("release asset size mismatch: expected %d, received %d", expectedSize, written)
+	}
+	if err := tmp.Sync(); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), destination)
+}
+
+// refuseDowngrade uses the last successfully installed signed release version.
+// An existing version with invalid provenance fails closed; a legacy appliance
+// without a version file can still receive its first signed update.
+func refuseDowngrade(versionFile, nextVersion string) error {
+	data, err := os.ReadFile(versionFile)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("cannot determine installed version: %w", err)
+	}
+	installed := strings.TrimSpace(string(data))
+	cmp, err := updatetrust.CompareVersions(nextVersion, installed)
+	if err != nil {
+		return fmt.Errorf("invalid installed update version: %w", err)
+	}
+	if cmp < 0 {
+		return fmt.Errorf("refusing automatic downgrade from %s to %s", installed, nextVersion)
+	}
+	return nil
 }
 
 func validateArchive(filename string) error {
