@@ -17,6 +17,7 @@ import (
 	"github.com/p8reit/LocasOS/internal/agentclient"
 	"github.com/p8reit/LocasOS/internal/server"
 	"github.com/p8reit/LocasOS/internal/updatetrust"
+	"github.com/p8reit/LocasOS/internal/updateprefs"
 )
 
 //go:embed index.html
@@ -67,12 +68,41 @@ func main() {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
+		channel, err := updateprefs.Load(stateDir)
+		if err != nil {
+			log.Printf("update preference invalid; defaulting to stable: %v", err)
+		}
 		sendJSON(w, http.StatusOK, map[string]string{
 			"installed_version": buildVersion,
+			"channel":           channel,
 			"availability":      "not_checked",
-			"update_method":     "verified_local_bundle",
-			"message":           "Automatic release discovery and dashboard application are not enabled yet. Apply a downloaded, checksummed LOCAS OS upgrade package with Upgrade-LocasOS.ps1.",
+			"update_method":     "signed_github_release",
+			"message":           "Check published Stable or Early Access releases. Installing requires a signed package and administrator approval.",
 		})
+	})
+	mux.HandleFunc("POST /api/updates/channel", func(w http.ResponseWriter, r *http.Request) {
+		if !admins.Authenticated(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		if !admin.SafeMutation(r) {
+			http.Error(w, "invalid request", http.StatusForbidden)
+			return
+		}
+		var selection struct {
+			Channel string `json:"channel"`
+		}
+		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&selection); err != nil || !updateprefs.ValidChannel(selection.Channel) {
+			http.Error(w, "unsupported update channel", http.StatusBadRequest)
+			return
+		}
+		if err := updateprefs.Save(stateDir, selection.Channel); err != nil {
+			http.Error(w, "cannot save update channel", http.StatusInternalServerError)
+			return
+		}
+		sendJSON(w, http.StatusOK, map[string]string{"channel": selection.Channel})
 	})
 	mux.HandleFunc("GET /api/updates/status", func(w http.ResponseWriter, r *http.Request) {
 		if !admins.Authenticated(r) {
@@ -105,6 +135,11 @@ func main() {
 			http.Error(w, "unsupported update selection", http.StatusBadRequest)
 			return
 		}
+		selectedChannel, err := updateprefs.Load(stateDir)
+		if err != nil || selectedChannel != request.Channel {
+			http.Error(w, "select and save the desired update channel first", http.StatusConflict)
+			return
+		}
 		data, _ := json.Marshal(request)
 		appProxy(w, r, socket, http.MethodPost, "/internal/updates/install", data)
 	})
@@ -115,7 +150,7 @@ func main() {
 		}
 		channel := r.URL.Query().Get("channel")
 		if channel == "" {
-			channel = "stable"
+			channel, _ = updateprefs.Load(stateDir)
 		}
 		if channel != "stable" && channel != "beta" {
 			http.Error(w, "unsupported update channel", http.StatusBadRequest)
