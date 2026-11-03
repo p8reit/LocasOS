@@ -217,7 +217,7 @@ func TestWorkerStrictQueueRejectsLegacyMalformedAndUnsafeFiles(t *testing.T) {
 }
 func TestWorkerRealJournalRestartRejectsReplayedCorrelation(t *testing.T) {
 	w, _, calls := fixture(t, "ollama")
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "audit")
 	journal, err := auditlog.Open(dir, "app-worker")
 	if err != nil {
 		t.Fatal(err)
