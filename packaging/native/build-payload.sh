@@ -6,7 +6,7 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo"
 mkdir -p build dist/native
 export CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-go build -trimpath -ldflags="-s -w" -o build/locas-core ./cmd/locas-core
+go build -trimpath -ldflags="-s -w -X main.trustedPublicKeyBase64=${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" -o build/locas-core ./cmd/locas-core
 go build -trimpath -ldflags="-s -w" -o build/locas-agent ./cmd/locas-agent
 # The updater's verification key MUST be injected from trusted release config.
 if [[ -z "${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" ]]; then

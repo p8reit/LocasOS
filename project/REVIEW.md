@@ -57,3 +57,7 @@ Promotion now requires an independently provisioned public key, verifies raw man
 ## Local verification update — 2026-11-03
 
 `go test ./...` and `go vet ./...` pass with the verified scratch Go 1.23.12 toolchain. Original review's missing-toolchain result remains historical. Workflow YAML and Bash run-block syntax checks pass. Ten Python recovery/safety tests and four Node dashboard tests pass. Windows/WSL lifecycle, actual signed appliance installation and operational release protections remain unverified.
+
+## Follow-up: R06 signed artifact-bound approvals — 2026-11-03
+
+P09E implementation binds authenticated approval to verified signed version/channel/digest, an expiring session selection and one enqueue attempt. Core and worker independently pin publisher verification keys; the worker rejects a replacement signed digest before apply. Rechecks, global channel changes, logout, restart, expiry and replay invalidate the selection. Queue/core strictly reject older version/channel-only requests. The installer lock now resides within the worker's existing writable sandbox directory; read-only `/run` and contention regressions pass. Operational target qualification and the other documented release gates remain open. Exact tests/review/CI are tracked in [P09E](phases/P09E.md) and issue #120.

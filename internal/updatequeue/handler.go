@@ -6,21 +6,18 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sync"
-)
+	"time"
 
-var allowedVersion = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+	"github.com/p8reit/LocasOS/internal/updateapproval"
+)
 
 type Manager struct {
 	Dir string
 	mu  sync.Mutex
 }
 
-type Request struct {
-	Channel string `json:"channel"`
-	Version string `json:"version"`
-}
+type Request = updateapproval.Job
 
 func New(dir string) *Manager {
 	return &Manager{Dir: dir}
@@ -45,14 +42,8 @@ func (m *Manager) status(w http.ResponseWriter, r *http.Request) {
 
 func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 	var req Request
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		http.Error(w, "invalid update approval", http.StatusBadRequest)
-		return
-	}
-	if (req.Channel != "stable" && req.Channel != "beta") || !allowedVersion.MatchString(req.Version) {
-		http.Error(w, "unsupported update channel or version", http.StatusBadRequest)
+	if err := updateapproval.Decode(http.MaxBytesReader(w, r.Body, 1024), &req); err != nil || req.Validate(time.Now()) != nil {
+		http.Error(w, "invalid or expired artifact approval", http.StatusBadRequest)
 		return
 	}
 	m.mu.Lock()
@@ -79,6 +70,9 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeErr := json.NewEncoder(f).Encode(req)
+	if writeErr == nil {
+		writeErr = f.Sync()
+	}
 	closeErr := f.Close()
 	if writeErr != nil || closeErr != nil {
 		_ = os.Remove(temp)
@@ -101,5 +95,6 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 		"state":   "queued",
 		"version": req.Version,
 		"channel": req.Channel,
+		"sha256":  req.SHA256,
 	})
 }

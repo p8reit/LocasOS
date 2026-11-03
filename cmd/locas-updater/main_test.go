@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/tar"
+	"github.com/p8reit/LocasOS/internal/updateapproval"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,7 +71,7 @@ func TestApprovedReleaseChannelAfterPromotion(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := releaseAllowed(release{Tag: tc.tag, Draft: tc.draft, Prerelease: tc.prerelease},
-				request{Channel: tc.channel, Version: "v0.10.0"})
+				request{Selection: updateapproval.Selection{Channel: tc.channel, Version: "v0.10.0"}})
 			if got != tc.want {
 				t.Fatalf("releaseAllowed=%v, want %v", got, tc.want)
 			}

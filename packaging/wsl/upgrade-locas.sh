@@ -9,7 +9,10 @@ main() {
   [[ -f "$root/etc/systemd/system/locas-core.service" && -x "$root/opt/locas/bin/locas-core" ]] || {
     echo "Not a provisioned LocasOS appliance" >&2; exit 1;
   }
-  exec 9>"$root/run/locas-upgrade.lock"
+  # This root-owned directory is writable inside the update worker sandbox;
+  # /run is read-only under ProtectSystem=strict.
+  install -d -m 0700 -o root -g root "$root/var/lib/locas-upgrades"
+  exec 9>"$root/var/lib/locas-upgrades/upgrade.lock"
   flock -n 9 || { echo "Another LOCAS upgrade is running" >&2; exit 1; }
   [[ -f "$archive" && -f "${archive}.sha256" ]] || { echo "Upgrade bundle/checksum missing" >&2; exit 1; }
   mapfile -t checksum_lines < "${archive}.sha256"
