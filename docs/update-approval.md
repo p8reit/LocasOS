@@ -11,7 +11,7 @@ Phase P09E / issue [LOS-120](https://github.com/p8reit/LocasOS/issues/120). Impl
 5. The peer-authorized agent validates the typed job, bounds/strictly decodes its JSON, synchronizes it to disk and creates the request without overwriting an existing job. It preserves approved version/channel/digest, token and expiry. The token is an opaque job identity, not independent root authorization.
 6. Root consumes the queued request once and validates its lifetime at consumption. It independently fetches and verifies signed metadata with its own pinned key. Both the signed digest and actual downloaded archive must match the approved SHA-256 **before** invoking installation. A different validly signed artifact under the same version is rejected. Existing channel/downgrade, archive and OS-base checks, health verification and recovery remain required. An already-started download can finish after selection expiry; expiry bounds authorization to start, not job execution time.
 
-Approvals are deliberately in memory in Core and single-use at the authenticated enqueue boundary. This is not a durable root replay journal, a package audit ledger or hard protection against a compromised privileged/agent identity. A fresh authenticated check and approval may authorize a same-version reinstall; unattended downgrade remains blocked by the existing updater policy.
+Approvals are deliberately in memory in Core and single-use at the authenticated enqueue boundary. This is not a durable root replay journal, a package audit ledger or hard protection against a compromised privileged/agent identity. P09F now blocks known same-version/no-op dashboard installation as well as older versions. A same-version repair requires an explicitly verified manual recovery operation; see [version policy](update-version-policy.md). Unknown legacy versions retain a clearly warned signed replacement path.
 
 ## Runtime API contract
 
@@ -49,3 +49,7 @@ Version/channel-only legacy installation requests now fail closed. Deploy Core, 
 ## Validation limits
 
 Source-level API, store concurrency, queue, worker substitution and embedded JavaScript tests cover this contract. Filesystem-isolated upgrade tests exercise read-only `/run` and lock contention in addition to prior rollback/safety cases. These do not prove a real Windows/WSL installation, production signing, interrupted power-loss recovery or real-GPU inference. Full target qualification and independent release approval remain separate gates.
+
+## P09F identity and eligibility
+
+Discovery now reports running build/commit separately from the last verified update record and revalidates numeric eligibility before issuing/consuming an approval. `install_eligible` is independent of signature/package readiness; a blocked candidate receives no approval. The exact four-field installation request remains unchanged. See [build identity and version policy](update-version-policy.md).

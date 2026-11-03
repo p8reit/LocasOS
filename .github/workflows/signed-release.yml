@@ -35,7 +35,15 @@ jobs:
             { echo 'Release publisher public key missing or does not match protected signing key' >&2; exit 1; }
           printf 'LOCAS_UPDATE_PUBLIC_KEY_B64=%s\n' "$public_key" >> "$GITHUB_ENV"
       - name: Build update bundle
-        run: bash packaging/wsl/build-rootfs.sh
+        env:
+          LOCAS_BUILD_VERSION: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA" || { echo 'Release source commit differs from workflow identity' >&2; exit 1; }
+          bash packaging/wsl/build-rootfs.sh
+          for binary in locas-core locas-updater; do
+            "build/$binary" --version | python3 -c 'import json,os,sys; m=json.load(sys.stdin); ok=m["release"]==os.environ["LOCAS_BUILD_VERSION"] and m["version"]==os.environ["LOCAS_BUILD_VERSION"] and m["commit"]==os.environ["GITHUB_SHA"]; sys.exit(0 if ok else "Built release identity mismatch")'
+          done
       - name: Stage identical user-facing upgrade scripts
         run: |
           cp packaging/wsl/Upgrade-LocasOS.ps1 dist/

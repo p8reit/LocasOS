@@ -90,7 +90,7 @@ func TestRefuseAutomaticDowngrades(t *testing.T) {
 		allow     bool
 	}{
 		{installed: "v0.11.0", target: "v0.10.0", allow: false},
-		{installed: "v0.11.0", target: "v0.11.0", allow: true},
+		{installed: "v0.11.0", target: "v0.11.0", allow: false},
 		{installed: "v0.11.0", target: "v0.12.0", allow: true},
 		{installed: "invalid", target: "v0.12.0", allow: false},
 	} {
@@ -101,9 +101,30 @@ func TestRefuseAutomaticDowngrades(t *testing.T) {
 		if (err == nil) != tc.allow {
 			t.Fatalf("from %s to %s: result %v; allow=%v", tc.installed, tc.target, err, tc.allow)
 		}
-		if !tc.allow && err != nil && !strings.Contains(err.Error(), "downgrade") &&
-			!strings.Contains(err.Error(), "invalid installed") {
+		if !tc.allow && (err == nil || !strings.Contains(err.Error(), "refusing automatic update")) {
 			t.Fatalf("unexpected block reason: %v", err)
 		}
+	}
+}
+
+func TestFreshReleaseAndConflictingWorkerIdentity(t *testing.T) {
+	original := buildVersion
+	t.Cleanup(func() { buildVersion = original })
+	buildVersion = "v2.0.0"
+	file := filepath.Join(t.TempDir(), "current-version")
+	if err := refuseDowngrade(file, "v1.9.0"); err == nil {
+		t.Fatal("fresh release downgrade")
+	}
+	if err := refuseDowngrade(file, "v2.0.0"); err == nil {
+		t.Fatal("fresh release no-op")
+	}
+	if err := refuseDowngrade(file, "v2.1.0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("v1.0.0\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := refuseDowngrade(file, "v3.0.0"); err == nil {
+		t.Fatal("conflicting worker identity accepted")
 	}
 }

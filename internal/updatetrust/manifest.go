@@ -20,11 +20,10 @@ type Manifest struct {
 	Commit   string `json:"commit"`
 }
 
-var versionPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 var commitPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func (m Manifest) Validate() error {
-	if !versionPattern.MatchString(m.Version) || !commitPattern.MatchString(m.Commit) {
+	if _, ok := VersionParts(m.Version); !ok || !commitPattern.MatchString(m.Commit) {
 		return errors.New("invalid release identity")
 	}
 	if m.Platform != "linux-amd64-wsl2" || m.File != "locasos-upgrade-amd64.tar" {

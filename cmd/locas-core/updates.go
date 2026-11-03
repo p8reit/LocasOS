@@ -41,18 +41,21 @@ type releaseInfo struct {
 }
 
 type updatesController struct {
-	admins    *admin.Manager
-	stateDir  string
-	socket    string
-	publicKey string
-	client    *http.Client
-	approvals *updateapproval.Store
-	channelMu sync.Mutex // channel persistence and approval invalidation are atomic
-	enqueue   func(http.ResponseWriter, *http.Request, []byte)
+	admins         *admin.Manager
+	stateDir       string
+	socket         string
+	publicKey      string
+	runningVersion string
+	runningCommit  string
+	versionFile    string
+	client         *http.Client
+	approvals      *updateapproval.Store
+	channelMu      sync.Mutex // channel persistence and approval invalidation are atomic
+	enqueue        func(http.ResponseWriter, *http.Request, []byte)
 }
 
 func newUpdatesController(admins *admin.Manager, stateDir, socket, key string) *updatesController {
-	u := &updatesController{admins: admins, stateDir: stateDir, socket: socket, publicKey: key, approvals: updateapproval.NewStore(), client: &http.Client{
+	u := &updatesController{runningVersion: buildVersion, runningCommit: buildCommit, versionFile: "/var/lib/locas-updates/current-version", admins: admins, stateDir: stateDir, socket: socket, publicKey: key, approvals: updateapproval.NewStore(), client: &http.Client{
 		Timeout: 6 * time.Second,
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			host := r.URL.Hostname()
@@ -93,9 +96,28 @@ func (u *updatesController) Handler() http.Handler {
 func (u *updatesController) revoke(r *http.Request) {
 	u.approvals.Invalidate(u.admins.SessionBinding(r))
 }
+func (u *updatesController) identity(result map[string]any) updatetrust.InstalledState {
+	state := updatetrust.InspectInstalled(u.runningVersion, u.versionFile)
+	result["installed_version"] = u.runningVersion
+	result["installed_commit"] = u.runningCommit
+	result["installed_release"] = state.InstalledRelease
+	result["last_verified_release"] = state.RecordedVersion
+	result["version_basis"] = state.Basis
+	return state
+}
+func (u *updatesController) eligibility(result map[string]any, target string) updatetrust.Eligibility {
+	policy := u.identity(result).Eligibility(target)
+	result["comparison"] = policy.Comparison
+	result["availability"] = policy.Availability
+	result["install_eligible"] = policy.Eligible
+	result["eligibility_reason"] = policy.Reason
+	return policy
+}
 func (u *updatesController) info(w http.ResponseWriter, r *http.Request) {
 	channel, _ := updateprefs.Load(u.stateDir)
-	sendJSON(w, http.StatusOK, map[string]string{"installed_version": buildVersion, "channel": channel, "availability": "not_checked", "update_method": "signed_github_release", "message": "Installation requires a signed artifact and one-time administrator approval of its SHA-256."})
+	result := map[string]any{"channel": channel, "availability": "not_checked", "update_method": "signed_github_release", "message": "Installation requires a signed artifact and one-time administrator approval of its SHA-256."}
+	u.identity(result)
+	sendJSON(w, http.StatusOK, result)
 }
 func (u *updatesController) channel(w http.ResponseWriter, r *http.Request) {
 	var selection struct {
@@ -125,6 +147,13 @@ func (u *updatesController) install(w http.ResponseWriter, r *http.Request) {
 	if err != nil || channel != selection.Channel {
 		u.channelMu.Unlock()
 		http.Error(w, "select and save the desired update channel first", http.StatusConflict)
+		return
+	}
+	policy := updatetrust.InspectInstalled(u.runningVersion, u.versionFile).Eligibility(selection.Version)
+	if !policy.Eligible {
+		u.approvals.Invalidate(u.admins.SessionBinding(r))
+		u.channelMu.Unlock()
+		http.Error(w, policy.Reason, http.StatusConflict)
 		return
 	}
 	job, err := u.approvals.Consume(u.admins.SessionBinding(r), selection)
@@ -270,17 +299,16 @@ func (u *updatesController) check(w http.ResponseWriter, r *http.Request) {
 	}
 	ready := len(files) == 6
 	result := map[string]any{
-		"installed_version":  buildVersion,
 		"channel":            channel,
 		"latest_release_tag": latest.Tag,
 		"release_url":        latest.URL,
 		"published_at":       latest.Published,
-		"availability":       "release_found_comparison_unverified",
 		"package_ready":      ready,
 		"package_files":      files,
 		"install_ready":      false,
 		"message":            "Installation requires verified signed metadata and a fresh one-time artifact approval.",
 	}
+	u.eligibility(result, latest.Tag)
 	if ready {
 		manifest, err := u.signedManifest(ctx, latest, assets)
 		if err != nil {
@@ -290,7 +318,8 @@ func (u *updatesController) check(w http.ResponseWriter, r *http.Request) {
 			saved, saveErr := updateprefs.Load(u.stateDir)
 			// Revalidate after network I/O: logout, global channel changes or a newer
 			// discovery must not mint authorization from a stale response.
-			if saveErr == nil && saved == channel && u.admins.SessionBinding(r) == session && session != "" {
+			policy := u.eligibility(result, latest.Tag)
+			if policy.Eligible && saveErr == nil && saved == channel && u.admins.SessionBinding(r) == session && session != "" {
 				selection, expires, issueErr := u.approvals.Issue(session, generation, manifest.Version, channel, strings.ToLower(manifest.SHA256))
 				if issueErr == nil {
 					result["install_ready"] = true

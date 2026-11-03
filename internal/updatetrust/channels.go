@@ -16,6 +16,10 @@ var numericVersion = regexp.MustCompile(`^v([0-9]+)\.([0-9]+)\.([0-9]+)$`)
 
 func VersionParts(tag string) ([3]int, bool) {
 	var version [3]int
+	// The root version record is bounded to 64 bytes including its newline.
+	if len(tag) > 63 {
+		return version, false
+	}
 	m := numericVersion.FindStringSubmatch(tag)
 	if m == nil {
 		return version, false

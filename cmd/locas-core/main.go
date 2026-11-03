@@ -15,6 +15,7 @@ import (
 	"github.com/p8reit/LocasOS/internal/admin"
 	"github.com/p8reit/LocasOS/internal/agentclient"
 	"github.com/p8reit/LocasOS/internal/server"
+	"github.com/p8reit/LocasOS/internal/updatetrust"
 )
 
 //go:embed index.html
@@ -25,8 +26,18 @@ var brandIcon []byte
 
 // Assigned at build time using -ldflags; development binaries identify their provenance.
 var buildVersion = "dev"
+var buildCommit = "unknown"
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		release := ""
+		if _, ok := updatetrust.VersionParts(buildVersion); ok {
+			release = buildVersion
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"version": buildVersion, "commit": buildCommit, "release": release})
+		return
+	}
+
 	addr := os.Getenv("LOCAS_LISTEN")
 	if addr == "" {
 		addr = "127.0.0.1:59420"
