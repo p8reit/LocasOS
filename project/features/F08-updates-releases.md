@@ -16,7 +16,7 @@ Stable/Early Access selection, signature/digest primitives, build-time key pinni
 
 ## Remaining work
 
-Resolve REVIEW.md update blockers: operational promotion qualification, target rollback, version UI policy and complete audit attribution. Test signed artifact end to end before promotion; confirm key/environment protection configuration externally.
+Resolve REVIEW.md update blockers: operational promotion qualification, target rollback and complete audit attribution. Test signed artifact end to end before promotion; confirm key/environment protection configuration externally.
 
 ## Guardrails
 
@@ -37,3 +37,7 @@ Signing-key newline, update watcher activation and stale UI selection repaired. 
 ## P09E implementation — 2026-11-03
 
 [Phase 9E](../phases/P09E.md) closes R06 at source level: Core verifies signed metadata with a pinned key, issues a ten-minute session-bound one-use selection, and the queue/worker preserve and enforce version/channel/SHA-256. Channel changes, rechecks, logout, restart and expired/replayed approvals fail closed. A different validly signed archive under the same version is rejected without new approval. See [runtime contract](../../docs/update-approval.md) for API/IPC compatibility and exact limits. Full P09B qualification remains open.
+
+## P09F implementation — 2026-11-03
+
+[Phase 9F](../phases/P09F.md) implements official WSL tag/full-commit stamping and truthful running-build versus last verified record display. Numeric policy blocks known same/older releases at discovery, enqueue and root admission; invalid/conflicting records fail closed. Unknown legacy admission is explicitly warned. Root persists verified version atomically only after health acceptance. See [version contract](../../docs/update-version-policy.md). Operational qualification/audit gates remain open.

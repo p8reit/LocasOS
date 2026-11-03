@@ -46,6 +46,8 @@ For issues, leave the release as prerelease, publish a **new version/tag and pac
 - Dashboard channel persistence, release discovery, one-time session-bound signed-digest approval and the independent worker are implemented. See [the approval contract](update-approval.md). Missing pinned keys block dashboard installation.
 - Queue and worker preserve approved identity; signed manifest and archive must match that exact digest before apply. Replaced signed assets require fresh administrator discovery/approval.
 - Package rollback covers changed binaries/scripts/units and removes additions; isolated and disposable CI recovery checks exist. Real Windows/WSL cross-version and power-loss qualification remain outstanding.
-- Installed-version UI comparison, complete audit attribution, operational rollback/release evidence and the full end-to-end target acceptance matrix remain open. A source test pass does not establish production readiness.
+- Complete audit attribution, operational rollback/release evidence and the full end-to-end target acceptance matrix remain open. A source test pass does not establish production readiness.
 
 Do not claim automatic/unattended updates or complete release qualification. Each installation still requires explicit administrator approval; publication/promotion remains a separate protected human approval gate.
+
+P09F adds explicit official WSL tag/commit stamping, truthful running-build versus verified-record UI, and numeric no-op/downgrade admission. See [version policy](update-version-policy.md); unknown legacy versions are clearly labeled rather than claimed to be older.

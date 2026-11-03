@@ -33,7 +33,8 @@ const sha256='a'.repeat(64),token='b'.repeat(64);
 function respond(call, channel='stable', overrides={}) {
   call.resolve({ok: true, json: async () => ({
     channel, latest_release_tag: 'v1.2.3', release_url: 'https://github.com/p8reit/LocasOS/releases/tag/v1.2.3',
-    package_ready: true, package_files: {}, install_ready:true,
+    package_ready: true, package_files: {}, install_ready:true, install_eligible:true, comparison:'newer',
+    installed_version:'v1.2.2',installed_commit:'c'.repeat(40),installed_release:'v1.2.2',last_verified_release:'v1.2.2',version_basis:'running_release',
     approval:{version:'v1.2.3',channel,sha256,token},...overrides
   })});
 }
@@ -133,5 +134,68 @@ test('polling cannot re-enable install while enqueue is in flight',async()=>{
   assert.equal(d.element('installupdate').disabled,true);await d.element('installupdate').listeners.click();assert.equal(d.pending.length,3);
   d.pending[1].reject(Error('uncertain transport failure'));await new Promise(resolve=>setImmediate(resolve));
   d.pending[3].resolve({ok:true,json:async()=>({state:'idle'})});await install;
+  assert.equal(d.run('selectedUpdate'),null);assert.equal(d.element('installupdate').disabled,true);
+});
+
+for(const [comparison,message,availability] of [
+  ['newer','Newer release available','update_available'],
+  ['same','Installed version is up to date','up_to_date'],
+  ['older','A newer version is already installed','newer_installed'],
+  ['unknown','Installed version unknown; this target is NOT confirmed newer','comparison_unknown'],
+  ['blocked','Installation blocked by version state','version_state_invalid']
+])test('renders backend numeric comparison '+comparison+' truthfully',async()=>{
+  const d=dashboard();const check=d.run('checkUpdates()');respond(d.pending[0],'stable',{
+    latest_release_tag:'v1.10.0', installed_version:'v1.9.0', comparison,availability,
+    install_eligible:comparison==='newer'||comparison==='unknown',
+    approval:{version:'v1.10.0',channel:'stable',sha256,token}
+  });await check;
+  assert.match(d.element('updateavailability').textContent,/v1\.10\.0/);
+  assert.ok(d.element('updateavailability').textContent.includes(message));
+  assert.doesNotMatch(d.element('updateavailability').textContent,/comparison unavailable/);
+  assert.equal(d.element('installupdate').disabled,comparison!=='newer'&&comparison!=='unknown');
+});
+for(const comparison of ['same','older','blocked'])for(const approval of [null,{version:'v1.2.3',channel:'stable',sha256,token},{sha256:[],token:1}])test(comparison+' cannot enable install despite discovery approval '+JSON.stringify(approval),async()=>{
+  const d=dashboard();const check=d.run('checkUpdates()');respond(d.pending[0],'stable',{comparison,install_eligible:false,install_ready:true,approval,eligibility_reason:'Version policy rejects this release'});await check;
+  assert.equal(d.run('selectedUpdate'),null);assert.equal(d.element('installupdate').disabled,true);
+  assert.match(d.element('updateavailability').textContent,/Version policy rejects this release/);
+  await d.element('installupdate').listeners.click();assert.equal(d.confirmations.length,0);assert.equal(d.pending.length,1);
+});
+test('explicit eligibility is required even with a valid newer signed approval',async()=>{
+  const d=dashboard();const check=d.run('checkUpdates()');respond(d.pending[0],'stable',{install_eligible:undefined});await check;
+  assert.equal(d.run('selectedUpdate'),null);assert.equal(d.element('installupdate').disabled,true);
+});
+test('legacy unknown version warns before sending exact approved upgrade identity',async()=>{
+  const d=dashboard();const check=d.run('checkUpdates()');respond(d.pending[0],'stable',{
+    comparison:'unknown',availability:'comparison_unknown',installed_version:'dev',installed_release:'',installed_commit:'unknown',last_verified_release:'',version_basis:'unknown',eligibility_reason:'Signed legacy upgrade permitted; installed version is unknown'
+  });await check;
+  assert.equal(d.element('systemversion').textContent,'dev');assert.equal(d.element('runningrelease').textContent,'Running release: unknown');
+  assert.match(d.element('updateavailability').textContent,/NOT confirmed newer/);
+  const install=d.element('installupdate').listeners.click();assert.match(d.confirmations[0],/Installed version unknown; this target is NOT confirmed newer/);
+  assert.deepEqual(JSON.parse(d.pending[1].options.body),{version:'v1.2.3',channel:'stable',sha256,token});
+  d.pending[1].resolve({ok:true,json:async()=>({})});await new Promise(resolve=>setImmediate(resolve));
+  d.pending[2].resolve({ok:true,json:async()=>({state:'idle'})});await install;
+});
+test('running identity and root verified record remain distinct',async()=>{
+  const d=dashboard();const refresh=d.run('refreshUpdates()');d.pending[0].resolve({ok:true,json:async()=>({
+    installed_version:'dev-experiment',installed_commit:'e'.repeat(40),installed_release:'',last_verified_release:'v1.9.0',version_basis:'verified_record',channel:'beta',availability:'not_checked'
+  })});await refresh;
+  assert.equal(d.element('systemversion').textContent,'dev-experiment');
+  assert.equal(d.element('runningcommit').textContent,'Running commit: '+'e'.repeat(40));
+  assert.equal(d.element('runningrelease').textContent,'Running release: unknown');
+  assert.equal(d.element('verifiedrelease').textContent,'Last verified release record: v1.9.0');
+  assert.equal(d.element('updatestatus').textContent,'Version basis: last verified release record');
+  assert.equal(d.element('updatechannel').value,'beta');
+});
+for(const version_basis of ['invalid_state','inconsistent'])test(version_basis+' is displayed as blocked rather than unknown',async()=>{
+  const d=dashboard();const check=d.run('checkUpdates()');respond(d.pending[0],'stable',{version_basis,comparison:'blocked',install_eligible:false,eligibility_reason:'Installed version state requires recovery'});await check;
+  assert.match(d.element('updatestatus').textContent,/installation blocked/);assert.equal(d.element('installupdate').disabled,true);
+});
+test('late initial identity refresh cannot overwrite a current channel discovery',async()=>{
+  const d=dashboard();const initial=d.run('refreshUpdates()');const check=d.run('checkUpdates()');respond(d.pending[1]);await check;
+  d.pending[0].resolve({ok:true,json:async()=>({installed_version:'obsolete',channel:'beta',availability:'not_checked'})});await initial;
+  assert.equal(d.element('systemversion').textContent,'v1.2.2');assert.equal(d.element('updatechannel').value,'stable');assert.match(d.element('updateavailability').textContent,/Newer release available/);
+});
+for(const comparison of ['same','older','blocked'])test(comparison+' stays disabled if readiness flags contradict comparison',async()=>{
+  const d=dashboard();const check=d.run('checkUpdates()');respond(d.pending[0],'stable',{comparison,install_eligible:true,install_ready:true});await check;
   assert.equal(d.run('selectedUpdate'),null);assert.equal(d.element('installupdate').disabled,true);
 });

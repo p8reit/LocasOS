@@ -59,6 +59,7 @@ func newUpdateFixture(t *testing.T) *updateFixture {
 	f := &updateFixture{private: key, cookie: &http.Cookie{Name: "locas_session", Value: token}, rel: releaseInfo{Tag: "v1.2.3", URL: releasePageRoot + "v1.2.3"}}
 	f.sign(t, updatetrust.Manifest{Version: "v1.2.3", Platform: "linux-amd64-wsl2", File: "locasos-upgrade-amd64.tar", SHA256: strings.Repeat("a", 64), Commit: strings.Repeat("b", 40)})
 	f.u = newUpdatesController(admins, dir, "unused", base64.StdEncoding.EncodeToString(pub))
+	f.u.versionFile = filepath.Join(dir, "current-version")
 	f.u.client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 		var body []byte
 		switch r.URL.String() {

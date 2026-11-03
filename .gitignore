@@ -9,3 +9,6 @@ dist/
 bin/
 coverage/
 *.log
+
+# Generated Go packaging binaries.
+/build/

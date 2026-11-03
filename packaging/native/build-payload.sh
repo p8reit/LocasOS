@@ -4,16 +4,19 @@ set -Eeuo pipefail
 umask 027
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo"
+source scripts/build-identity.sh
+# Native payloads remain developer builds regardless of WSL release environment.
+locas_resolve_build_identity "$repo" ""
 mkdir -p build dist/native
 export CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-go build -trimpath -ldflags="-s -w -X main.trustedPublicKeyBase64=${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" -o build/locas-core ./cmd/locas-core
+go build -trimpath -ldflags="-s -w -X main.buildVersion=${locas_build_version} -X main.buildCommit=${locas_build_commit} -X main.trustedPublicKeyBase64=${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" -o build/locas-core ./cmd/locas-core
 go build -trimpath -ldflags="-s -w" -o build/locas-agent ./cmd/locas-agent
 # The updater's verification key MUST be injected from trusted release config.
 if [[ -z "${LOCAS_UPDATE_PUBLIC_KEY_B64:-}" ]]; then
   echo 'LOCAS_UPDATE_PUBLIC_KEY_B64 missing; refuse to build an updater without a pinned key' >&2
   exit 1
 fi
-go build -trimpath -ldflags="-s -w -X main.trustedPublicKeyBase64=${LOCAS_UPDATE_PUBLIC_KEY_B64}" -o build/locas-updater ./cmd/locas-updater
+go build -trimpath -ldflags="-s -w -X main.buildVersion=${locas_build_version} -X main.buildCommit=${locas_build_commit} -X main.trustedPublicKeyBase64=${LOCAS_UPDATE_PUBLIC_KEY_B64}" -o build/locas-updater ./cmd/locas-updater
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/opt/locas/bin" "$stage/usr/local/sbin" "$stage/etc/systemd/system"

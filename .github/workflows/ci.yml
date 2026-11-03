@@ -17,7 +17,9 @@ jobs:
         run: |
           if [ -f go.mod ]; then go test ./...; else echo "Go scaffold pending: tracked in LOS-002"; fi
       - name: Approval concurrency race checks
-        run: go test -race ./internal/updateapproval ./internal/updatequeue
+        run: go test -race ./internal/updateapproval ./internal/updatequeue ./internal/updatetrust
+      - name: Build identity and actual binary metadata
+        run: LOCAS_TEST_GO="$(command -v go)" python3 tests/build-identity.test.py
       - name: Go formatting
         run: |
           if [ -f go.mod ]; then files="$(gofmt -l ./cmd ./internal)"; printf "%s\\n" "$files"; if [ -n "$files" ]; then gofmt -d ./cmd ./internal; exit 1; fi; fi

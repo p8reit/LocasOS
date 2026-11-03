@@ -25,6 +25,8 @@ import (
 // An official release pins its trusted publisher key at build time.
 // Unsigned developer builds leave this empty and refuse privileged updates.
 var trustedPublicKeyBase64 string
+var buildVersion = "dev"
+var buildCommit = "unknown"
 
 const (
 	requestFile = "/var/lib/locas/update-install.request"
@@ -56,6 +58,15 @@ type status struct {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		release := ""
+		if _, ok := updatetrust.VersionParts(buildVersion); ok {
+			release = buildVersion
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"version": buildVersion, "commit": buildCommit, "release": release})
+		return
+	}
+
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -189,6 +200,9 @@ func run() error {
 	if err := os.WriteFile(sidecar, []byte(digest+"  locasos-upgrade-amd64.tar\n"), 0600); err != nil {
 		return fail(err)
 	}
+	if err := refuseDowngrade(filepath.Join(stateDir, "current-version"), req.Version); err != nil {
+		return fail(err)
+	}
 	setStatus(status{State: "applying", Version: req.Version, Channel: req.Channel, Message: "Backup, install and service health checks"})
 	command := exec.CommandContext(ctx, "bash", "/usr/local/sbin/locas-upgrade", archive)
 	command.Stdout = os.Stdout
@@ -196,7 +210,7 @@ func run() error {
 	if err := command.Run(); err != nil {
 		return fail(fmt.Errorf("upgrade failed; recovery attempted: %w", err))
 	}
-	if err := os.WriteFile(filepath.Join(stateDir, "current-version"), []byte(req.Version+"\n"), 0644); err != nil {
+	if err := updatetrust.PersistInstalledVersion(filepath.Join(stateDir, "current-version"), req.Version); err != nil {
 		return fail(err)
 	}
 	setStatus(status{State: "installed", Version: req.Version, Channel: req.Channel, Message: "Health-checked upgrade completed"})
@@ -279,24 +293,13 @@ func download(ctx context.Context, client *http.Client, url, destination string,
 	return os.Rename(tmp.Name(), destination)
 }
 
-// refuseDowngrade uses the last successfully installed signed release version.
-// An existing version with invalid provenance fails closed; a legacy appliance
-// without a version file can still receive its first signed update.
+// refuseDowngrade independently applies the same known-version policy as
+// Core, including a fresh official image with no completed-update record yet.
 func refuseDowngrade(versionFile, nextVersion string) error {
-	data, err := os.ReadFile(versionFile)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("cannot determine installed version: %w", err)
-	}
-	installed := strings.TrimSpace(string(data))
-	cmp, err := updatetrust.CompareVersions(nextVersion, installed)
-	if err != nil {
-		return fmt.Errorf("invalid installed update version: %w", err)
-	}
-	if cmp < 0 {
-		return fmt.Errorf("refusing automatic downgrade from %s to %s", installed, nextVersion)
+	state := updatetrust.InspectInstalled(buildVersion, versionFile)
+	policy := state.Eligibility(nextVersion)
+	if !policy.Eligible {
+		return fmt.Errorf("refusing automatic update (%s): %s", policy.Comparison, policy.Reason)
 	}
 	return nil
 }
