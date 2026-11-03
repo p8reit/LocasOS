@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -16,8 +15,6 @@ import (
 	"github.com/p8reit/LocasOS/internal/admin"
 	"github.com/p8reit/LocasOS/internal/agentclient"
 	"github.com/p8reit/LocasOS/internal/server"
-	"github.com/p8reit/LocasOS/internal/updateprefs"
-	"github.com/p8reit/LocasOS/internal/updatetrust"
 )
 
 //go:embed index.html
@@ -63,192 +60,10 @@ func main() {
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
 		_, _ = w.Write(landingPage)
 	})
-	mux.HandleFunc("GET /api/updates", func(w http.ResponseWriter, r *http.Request) {
-		if !admins.Authenticated(r) {
-			http.Error(w, "authentication required", http.StatusUnauthorized)
-			return
-		}
-		channel, err := updateprefs.Load(stateDir)
-		if err != nil {
-			log.Printf("update preference invalid; defaulting to stable: %v", err)
-		}
-		sendJSON(w, http.StatusOK, map[string]string{
-			"installed_version": buildVersion,
-			"channel":           channel,
-			"availability":      "not_checked",
-			"update_method":     "signed_github_release",
-			"message":           "Check published Stable or Early Access releases. Installing requires a signed package and administrator approval.",
-		})
-	})
-	mux.HandleFunc("POST /api/updates/channel", func(w http.ResponseWriter, r *http.Request) {
-		if !admins.Authenticated(r) {
-			http.Error(w, "authentication required", http.StatusUnauthorized)
-			return
-		}
-		if !admin.SafeMutation(r) {
-			http.Error(w, "invalid request", http.StatusForbidden)
-			return
-		}
-		var selection struct {
-			Channel string `json:"channel"`
-		}
-		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&selection); err != nil || !updateprefs.ValidChannel(selection.Channel) {
-			http.Error(w, "unsupported update channel", http.StatusBadRequest)
-			return
-		}
-		if err := updateprefs.Save(stateDir, selection.Channel); err != nil {
-			http.Error(w, "cannot save update channel", http.StatusInternalServerError)
-			return
-		}
-		sendJSON(w, http.StatusOK, map[string]string{"channel": selection.Channel})
-	})
-	mux.HandleFunc("GET /api/updates/status", func(w http.ResponseWriter, r *http.Request) {
-		if !admins.Authenticated(r) {
-			http.Error(w, "authentication required", http.StatusUnauthorized)
-			return
-		}
-		appProxy(w, r, socket, http.MethodGet, "/internal/updates/status", nil)
-	})
-	mux.HandleFunc("POST /api/updates/install", func(w http.ResponseWriter, r *http.Request) {
-		if !admins.Authenticated(r) {
-			http.Error(w, "authentication required", http.StatusUnauthorized)
-			return
-		}
-		if !admin.SafeMutation(r) {
-			http.Error(w, "invalid request", http.StatusForbidden)
-			return
-		}
-		var request struct {
-			Version string `json:"version"`
-			Channel string `json:"channel"`
-		}
-		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&request); err != nil {
-			http.Error(w, "invalid update request", http.StatusBadRequest)
-			return
-		}
-		if (request.Channel != "stable" && request.Channel != "beta") ||
-			len(request.Version) < 6 || len(request.Version) > 40 {
-			http.Error(w, "unsupported update selection", http.StatusBadRequest)
-			return
-		}
-		selectedChannel, err := updateprefs.Load(stateDir)
-		if err != nil || selectedChannel != request.Channel {
-			http.Error(w, "select and save the desired update channel first", http.StatusConflict)
-			return
-		}
-		data, _ := json.Marshal(request)
-		appProxy(w, r, socket, http.MethodPost, "/internal/updates/install", data)
-	})
-	mux.HandleFunc("GET /api/updates/check", func(w http.ResponseWriter, r *http.Request) {
-		if !admins.Authenticated(r) {
-			http.Error(w, "authentication required", http.StatusUnauthorized)
-			return
-		}
-		channel := r.URL.Query().Get("channel")
-		if channel == "" {
-			channel, _ = updateprefs.Load(stateDir)
-		}
-		if channel != "stable" && channel != "beta" {
-			http.Error(w, "unsupported update channel", http.StatusBadRequest)
-			return
-		}
-		apiURL := "https://api.github.com/repos/p8reit/LocasOS/releases?per_page=100"
-		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
-		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-		if err != nil {
-			http.Error(w, "update check unavailable", 503)
-			return
-		}
-		req.Header.Set("Accept", "application/vnd.github+json")
-		req.Header.Set("User-Agent", "LocasOS-update-check")
-		client := &http.Client{Timeout: 6 * time.Second}
-		res, err := client.Do(req)
-		if err != nil {
-			http.Error(w, "release discovery unavailable", 503)
-			return
-		}
-		defer res.Body.Close()
-		if res.StatusCode != http.StatusOK {
-			http.Error(w, fmt.Sprintf("release discovery unavailable (%d)", res.StatusCode), 503)
-			return
-		}
-		type releaseInfo struct {
-			Tag        string `json:"tag_name"`
-			URL        string `json:"html_url"`
-			Published  string `json:"published_at"`
-			Draft      bool   `json:"draft"`
-			Prerelease bool   `json:"prerelease"`
-			Assets     []struct {
-				Name string `json:"name"`
-				URL  string `json:"browser_download_url"`
-				Size int64  `json:"size"`
-			} `json:"assets"`
-		}
-		var releases []releaseInfo
-		if err := json.NewDecoder(io.LimitReader(res.Body, 1024*1024)).Decode(&releases); err != nil {
-			http.Error(w, "invalid release metadata", 502)
-			return
-		}
-		candidates := make([]updatetrust.ReleaseCandidate, 0, len(releases))
-		for _, release := range releases {
-			candidates = append(candidates, updatetrust.ReleaseCandidate{Tag: release.Tag, Draft: release.Draft, Prerelease: release.Prerelease})
-		}
-		selected, found := updatetrust.SelectLatest(candidates, channel)
-		if !found {
-			http.Error(w, "no releases available in selected channel", 404)
-			return
-		}
-		var latest releaseInfo
-		for _, release := range releases {
-			if release.Tag == selected.Tag {
-				latest = release
-				break
-			}
-		}
-		if len(latest.Tag) < 1 || len(latest.Tag) > 100 ||
-			!strings.HasPrefix(latest.URL, "https://github.com/p8reit/LocasOS/releases/tag/") ||
-			latest.Draft || (channel == "stable" && latest.Prerelease) {
-			http.Error(w, "invalid release metadata", 502)
-			return
-		}
-		// Never accept caller-controlled URLs. Only expose known files under our fixed release namespace.
-		files := map[string]string{}
-		for _, asset := range latest.Assets {
-			switch asset.Name {
-			case "locasos-upgrade-amd64.tar", "locasos-upgrade-amd64.tar.sha256",
-				"locasos-update.json", "locasos-update.sig",
-				"Upgrade-LocasOS.ps1", "upgrade-locas.sh":
-				if asset.Size > 0 && asset.Size <= 512*1024*1024 &&
-					strings.HasPrefix(asset.URL, "https://github.com/p8reit/LocasOS/releases/download/") &&
-					strings.HasSuffix(asset.URL, "/"+asset.Name) {
-					files[asset.Name] = asset.URL
-				}
-			}
-		}
-		ready := !latest.Draft &&
-			files["locasos-upgrade-amd64.tar"] != "" &&
-			files["locasos-upgrade-amd64.tar.sha256"] != "" &&
-			files["locasos-update.json"] != "" &&
-			files["locasos-update.sig"] != "" &&
-			files["Upgrade-LocasOS.ps1"] != "" &&
-			files["upgrade-locas.sh"] != ""
-		sendJSON(w, http.StatusOK, map[string]any{
-			"installed_version":  buildVersion,
-			"channel":            channel,
-			"latest_release_tag": latest.Tag,
-			"release_url":        latest.URL,
-			"published_at":       latest.Published,
-			"availability":       "release_found_comparison_unverified",
-			"package_ready":      ready,
-			"package_files":      files,
-			"message":            "Release assets include a signing manifest but its signature is not yet checked by the dashboard. Review their source and use the manual upgrade procedure; in-dashboard privileged installation is disabled.",
-		})
-	})
+	updates := newUpdatesController(admins, stateDir, socket, trustedPublicKeyBase64)
+	updateHandler := updates.Handler()
+	mux.Handle("/api/updates", updateHandler)
+	mux.Handle("/api/updates/", updateHandler)
 	mux.HandleFunc("GET /api/session", func(w http.ResponseWriter, r *http.Request) {
 		sendJSON(w, http.StatusOK, map[string]bool{
 			"configured":    admins.Configured(),
@@ -294,6 +109,7 @@ func main() {
 			http.Error(w, "invalid request", http.StatusForbidden)
 			return
 		}
+		updates.revoke(r)
 		admins.Logout(r)
 		admin.ClearCookie(w)
 		sendJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})

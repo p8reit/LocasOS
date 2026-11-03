@@ -40,12 +40,12 @@ For issues, leave the release as prerelease, publish a **new version/tag and pac
 - CI tests stable/prerelease filtering, signature tampering, malformed/oversized archive, interrupted transfers, persisted status, install failure, rollback and data preservation.
 - TowerDoom verifies the actual Early Access archive *before* the exact same archive is promoted to Stable.
 
-## Current implementation vs remaining work
+## Current implementation vs remaining work (2026-11-03)
 
-- Signed manifest tooling and GitHub prerelease publishing, plus protected promotion workflow: implemented in repository, but signing secret/key provisioning and the actual first GitHub release are not confirmed.
-- Dashboard release lookup and manual assets: implemented.
-- Dashboard channel selector and installed-version comparison: **not implemented**.
-- Runtime public-key pinning, signed update verification, download/stage worker, approval-to-root boundary, progress UI, full rollback: **not implemented**.
-- Promotion workflow currently checks asset presence, but must validate the signature and SHA-256 before it is safe for production use.
+- Signed manifest tooling, independent verification and metadata-only protected promotion workflow are implemented. Actual production key/environment setup and target release evidence are separate operational gates.
+- Dashboard channel persistence, release discovery, one-time session-bound signed-digest approval and the independent worker are implemented. See [the approval contract](update-approval.md). Missing pinned keys block dashboard installation.
+- Queue and worker preserve approved identity; signed manifest and archive must match that exact digest before apply. Replaced signed assets require fresh administrator discovery/approval.
+- Package rollback covers changed binaries/scripts/units and removes additions; isolated and disposable CI recovery checks exist. Real Windows/WSL cross-version and power-loss qualification remain outstanding.
+- Installed-version UI comparison, complete audit attribution, operational rollback/release evidence and the full end-to-end target acceptance matrix remain open. A source test pass does not establish production readiness.
 
-Do not claim auto-update or fully signed verification works until the remaining gates are built and tested.
+Do not claim automatic/unattended updates or complete release qualification. Each installation still requires explicit administrator approval; publication/promotion remains a separate protected human approval gate.

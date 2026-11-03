@@ -4,6 +4,7 @@ Only its fixed root constant is substituted. Commands that operate on services,
 identity and health are mocked; tar, checksums, install and restore are real.
 This is failure-injection coverage, not Windows/WSL validation.
 """
+import fcntl
 import hashlib
 import io
 import os
@@ -148,6 +149,24 @@ exit 0''')
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.data.read_bytes(), b'valuable-model')
         self.assertEqual((self.root/CORE).read_bytes(), b'old-core')
+
+    def test_worker_does_not_require_writable_run(self):
+        self.bundle()
+        (self.root/'run').chmod(0o555)
+        result = self.run_upgrade()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.root/'var/lib/locas-upgrades/upgrade.lock').exists())
+
+    def test_upgrade_lock_blocks_competing_installer(self):
+        self.bundle()
+        directory=self.root/'var/lib/locas-upgrades'
+        directory.mkdir()
+        with (directory/'upgrade.lock').open('w') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result=self.run_upgrade()
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('Another LOCAS upgrade is running',result.stderr)
+        self.assert_restored()
 
     def test_partial_install_failure_rolls_back(self):
         self.bundle()

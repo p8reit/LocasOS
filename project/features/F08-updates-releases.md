@@ -16,7 +16,7 @@ Stable/Early Access selection, signature/digest primitives, build-time key pinni
 
 ## Remaining work
 
-Resolve REVIEW.md update blockers: approval bound to digest, operational promotion qualification, target rollback and version policy. Test signed artifact end to end before promotion; confirm key/environment protection configuration externally.
+Resolve REVIEW.md update blockers: operational promotion qualification, target rollback, version UI policy and complete audit attribution. Test signed artifact end to end before promotion; confirm key/environment protection configuration externally.
 
 ## Guardrails
 
@@ -33,3 +33,7 @@ Read [project index](../README.md), [review](../REVIEW.md), [parallel work rules
 ## Implementation update — 2026-11-03
 
 Signing-key newline, update watcher activation and stale UI selection repaired. P09 rollback implementation now covers package scripts/units/new files, with ten passing isolated failure/safety tests. Four dashboard selection/race tests pass. See phase handoffs for limits. Promotion signature/digest verification is implemented with nine passing Go cases; protected environment provisioning, real promotion qualification and digest-bound dashboard approval remain open; real signed WSL validation is still required.
+
+## P09E implementation — 2026-11-03
+
+[Phase 9E](../phases/P09E.md) closes R06 at source level: Core verifies signed metadata with a pinned key, issues a ten-minute session-bound one-use selection, and the queue/worker preserve and enforce version/channel/SHA-256. Channel changes, rechecks, logout, restart and expired/replayed approvals fail closed. A different validly signed archive under the same version is rejected without new approval. See [runtime contract](../../docs/update-approval.md) for API/IPC compatibility and exact limits. Full P09B qualification remains open.

@@ -14,11 +14,11 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/p8reit/LocasOS/internal/updateapproval"
 	"github.com/p8reit/LocasOS/internal/updatetrust"
 )
 
@@ -33,12 +33,7 @@ const (
 	releaseRoot = "https://github.com/p8reit/LocasOS/releases/download/"
 )
 
-var tagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
-
-type request struct {
-	Channel string `json:"channel"`
-	Version string `json:"version"`
-}
+type request = updateapproval.Job
 
 type asset struct {
 	Name string `json:"name"`
@@ -84,19 +79,20 @@ func run() error {
 	}
 	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 
-	buf, err := os.ReadFile(requestFile)
+	buf, err := readQueuedApproval(requestFile)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
+		setStatus(status{State: "failed", Message: "invalid queued approval file"})
+		_ = os.Remove(requestFile) // remove only the queue entry; never follow a link
 		return err
 	}
 	if err := os.Remove(requestFile); err != nil {
 		return err
 	}
 	var req request
-	if len(buf) > 1024 || json.Unmarshal(buf, &req) != nil ||
-		!tagPattern.MatchString(req.Version) || (req.Channel != "stable" && req.Channel != "beta") {
+	if len(buf) > 1024 || updateapproval.Decode(strings.NewReader(string(buf)), &req) != nil || req.Validate(time.Now()) != nil {
 		setStatus(status{State: "failed", Message: "invalid queued update request"})
 		return errors.New("invalid update request")
 	}
@@ -178,20 +174,10 @@ func run() error {
 	if err != nil {
 		return fail(err)
 	}
-	manifest, err := updatetrust.Verify(manifestBytes, signature, ed25519.PublicKey(key))
-	if err != nil {
-		return fail(err)
-	}
-	if manifest.Version != req.Version {
-		return fail(errors.New("signed release version mismatch"))
-	}
 	archive := filepath.Join(work, "locasos-upgrade-amd64.tar")
-	digest, err := updatetrust.FileHash(archive)
+	digest, err := verifyApprovedArtifact(manifestBytes, signature, ed25519.PublicKey(key), req, archive)
 	if err != nil {
 		return fail(err)
-	}
-	if !strings.EqualFold(digest, manifest.SHA256) {
-		return fail(errors.New("signed archive digest mismatch"))
 	}
 	if err := validateArchive(archive); err != nil {
 		return fail(err)
@@ -422,4 +408,54 @@ func checkReleaseOSBase(archive, osRelease string) error {
 		return fmt.Errorf("blocked incompatible OS application update: installed=%s target=%s; use an explicitly verified distro migration", current, target)
 	}
 	return nil
+}
+
+func verifyApprovedArtifact(manifestBytes, signature []byte, key ed25519.PublicKey, req request, archive string) (string, error) {
+	if err := req.Selection.Validate(); err != nil {
+		return "", err
+	}
+	manifest, err := updatetrust.Verify(manifestBytes, signature, key)
+	if err != nil {
+		return "", err
+	}
+	if manifest.Version != req.Version {
+		return "", errors.New("signed release version mismatch")
+	}
+	if !strings.EqualFold(manifest.SHA256, req.SHA256) {
+		return "", errors.New("signed artifact differs from administrator-approved SHA-256")
+	}
+	digest, err := updatetrust.FileHash(archive)
+	if err != nil {
+		return "", err
+	}
+	if digest != req.SHA256 {
+		return "", errors.New("archive differs from administrator-approved SHA-256")
+	}
+	return digest, nil
+}
+
+// The request directory belongs to the restricted agent. Bound reads before
+// allocation and refuse symlinks/FIFOs rather than reading root-only targets.
+func readQueuedApproval(filename string) ([]byte, error) {
+	fd, err := syscall.Open(filename, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	f := os.NewFile(uintptr(fd), filename)
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > 1024 {
+		return nil, errors.New("invalid queued approval file type or size")
+	}
+	data, err := io.ReadAll(io.LimitReader(f, 1025))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > 1024 {
+		return nil, errors.New("queued approval exceeds size limit")
+	}
+	return data, nil
 }

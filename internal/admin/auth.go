@@ -246,3 +246,17 @@ func DecodePassword(w http.ResponseWriter, r *http.Request) (string, error) {
 	}
 	return body.Password, nil
 }
+
+// SessionBinding is a non-reversible identifier for authenticated in-memory
+// session state. It never exposes the session cookie in approval responses/logs.
+func (m *Manager) SessionBinding(r *http.Request) string {
+	if !m.Authenticated(r) {
+		return ""
+	}
+	c, err := r.Cookie(cookieName)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(c.Value))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
