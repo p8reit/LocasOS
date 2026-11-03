@@ -16,7 +16,8 @@ Phase numbers preserve names found in repository history/docs; they are not comp
 | [P09B: Trusted updates and release channels](phases/P09B.md) | Implemented preview; release blocked | F08, F04, F10 |
 | [P09E: Signed artifact-bound approval](phases/P09E.md) | Merged PR #121; target qualification remains open | F08, F02, F04, F10 |
 | [P09F: Build identity and update eligibility](phases/P09F.md) | Merged PR #123 (`d144cd7`); target qualification remains open | F08, F04, F10 |
-| [P09G: Durable security auditing and attribution](phases/P09G.md) | Implementation complete; CI/merge approval pending | F02, F08, F10 |
-| [NEXT: Scheduling, storage and release qualification](phases/NEXT.md) | Mixed: scheduler/storage not started; qualification partial | F09, F10 |
+| [P09G: Durable security auditing and attribution](phases/P09G.md) | Merged PR #125 (`fb18e46`); target qualification remains open | F02, F08, F10 |
+| [P10A: Durable compute queue and admission foundation](phases/P10A.md) | Source complete; CI/merge approval pending, no live dispatcher | F09, F02, F10 |
+| [NEXT: Scheduling, storage and release qualification](phases/NEXT.md) | Storage/admission foundation in P10A; runtime/API/UI and qualification remain | F09, F10 |
 
 Recommended sequence: validate the repaired installer on WSL and fix updater release blockers first. Contract/dashboard reconciliation, read-only telemetry validation and packaging test preparation can proceed independently with file reservations. Trusted updates depend on proven base upgrade recovery; scheduling depends on an agreed durable storage contract. Full qualification follows integration of all release-scoped features. These are review recommendations, not assigned issues or deadlines.
