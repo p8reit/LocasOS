@@ -16,6 +16,15 @@ For read-only physical-host readiness and interactive diskless QEMU checks, use 
 ## CI
 The `Debian Native Live ISO` workflow invokes `packaging/debian/build-live-iso.sh` and validates checksums and EFI boot metadata. The output is a **short-lived CI development artifact**; the absence of an install program is intentional.
 
+The diskless QEMU check currently verifies process survival, not guest health or
+console login. A green run is not evidence that D-Bus or the live session works.
+The live image explicitly includes `user-setup` and `sudo` because recommended
+packages are disabled. Without `user-setup`, Debian live-config skips creating
+the live user even though getty attempts automatic login. System directories in
+the native payload must be mode `0755`: extracting build-time mode `0750` onto
+`/etc` or `/usr` prevents non-root services from accessing system files. Archive
+validation rejects this regression before ISO construction.
+
 Do not publish the ISO as stable or write it to physical machines until an isolated UEFI boot test, a safe target disk installer, native package authentication, update/recovery, and GPU hardware validation pass.
 
 ## Next gates

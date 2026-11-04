@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # LocasOS Debian-based developer live ISO. No disk installer or autoinstall.
 set -Eeuo pipefail
-umask 027
+# live-build and includes.chroot create public system directories and config.
+umask 022
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo"
 for tool in lb go sha256sum; do command -v "$tool" >/dev/null || { echo "Missing $tool" >&2; exit 1; }; done
@@ -23,6 +24,8 @@ grep -Ev '^[[:space:]]*(#|$)' packaging/common/base-packages.txt > "$workspace/c
 cat >> "$workspace/config/package-lists/locasos.list.chroot" <<'LIST'
 openssh-client
 pciutils
+user-setup
+sudo
 LIST
 # Debian Live defaults to a live session, not automatic host disk installation.
 cat > "$workspace/config/hooks/live/010-locasos-brand.hook.chroot" <<'HOOK'

@@ -41,6 +41,8 @@ def verify(path: str) -> None:
             if member.isdir():
                 if name not in ALLOWED_DIRS:
                     raise ValueError(f"unexpected directory: {name}")
+                if member.mode != 0o755:
+                    raise ValueError(f"system directory must have mode 0755: {name}")
             elif member.isfile():
                 if name not in ALLOWED_FILES or name in found:
                     raise ValueError(f"unexpected or duplicate file: {name}")

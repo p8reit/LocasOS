@@ -22,6 +22,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+      - name: Test payload directory permissions
+        run: python3 -m unittest discover -s packaging/native -p 'test_verify_archive.py'
       - name: Build inside upstream Debian 13 container
         shell: bash
         run: |
