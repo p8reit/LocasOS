@@ -1,5 +1,14 @@
 name: Debian Native Live ISO
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'packaging/debian/**'
+      - 'packaging/common/**'
+      - '.github/workflows/debian-native-iso.yml'
+      - 'packaging/native/**'
+      - 'cmd/**'
+      - 'internal/**'
   pull_request:
     paths:
       - 'packaging/debian/**'
