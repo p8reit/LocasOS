@@ -3,6 +3,7 @@ Description=LOCAS OS local control plane
 After=locas-agent.service
 Requires=locas-agent.service
 [Service]
+EnvironmentFile=-/etc/locas/runtime.env
 Type=simple
 User=locas-core
 Group=locas-agent

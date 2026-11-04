@@ -45,7 +45,7 @@ main() {
     case "$member" in
       opt|opt/locas|opt/locas/bin|etc|etc/systemd|etc/systemd/system|usr|usr/local|usr/local/sbin) ;;
       opt/locas/bin/locas-core|opt/locas/bin/locas-agent|opt/locas/bin/locas-updater|opt/locas/bin/locas-app-worker|opt/locas/bin/locas-audit|opt/locas/bin/locas-os-base|\
-      etc/systemd/system/locas-core.service|etc/systemd/system/locas-agent.service|\
+      etc/systemd/system/locas-core.service|etc/systemd/system/locas-agent.service|etc/systemd/system/locas-ollama.service|\
       etc/systemd/system/locas-app-worker.path|etc/systemd/system/locas-app-worker.service|\
       etc/systemd/system/locas-update-worker.path|etc/systemd/system/locas-update-worker.service|\
       usr/local/sbin/locas-app-worker|usr/local/sbin/locas-install-ollama|\

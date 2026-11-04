@@ -45,7 +45,7 @@ func fixture(t *testing.T, app string) (*worker, *memoryRecorder, *[]string) {
 	}
 	recorder := &memoryRecorder{}
 	calls := []string{}
-	w := &worker{requestPath: path, statusDir: filepath.Join(dir, "status"), queueUID: uid, recorder: recorder, installed: func() bool { return false }}
+	w := &worker{requestPath: path, statusDir: filepath.Join(dir, "status"), queueUID: uid, recorder: recorder, ollamaReady: func(context.Context) bool { return true }}
 	w.execute = func(_ context.Context, path string, args ...string) error {
 		if len(recorder.events) == 0 || recorder.events[0].Stage != "intent" {
 			t.Fatal("action without durable intent")
@@ -64,7 +64,7 @@ func status(t *testing.T, w *worker) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return strings.TrimSpace(string(data))
+	return appmanager.ParseStatus(strings.TrimSpace(string(data))).Job
 }
 func TestWorkerFixedApplicationCommandsAndCorrelation(t *testing.T) {
 	for _, app := range []string{"ollama", "open-webui"} {
@@ -93,13 +93,13 @@ func TestWorkerFixedApplicationCommandsAndCorrelation(t *testing.T) {
 		})
 	}
 }
-func TestWorkerExistingOllamaOnlyEnablesFixedService(t *testing.T) {
+func TestWorkerExistingOllamaUsesValidatedFixedInstaller(t *testing.T) {
 	w, _, calls := fixture(t, "ollama")
-	w.installed = func() bool { return true }
+	w.ollamaReady = func(context.Context) bool { return true }
 	if err := w.run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if (*calls)[0] != "/usr/bin/systemctl enable --now locas-ollama.service" {
+	if (*calls)[0] != "/usr/local/sbin/locas-install-ollama " {
 		t.Fatalf("calls %v", *calls)
 	}
 }

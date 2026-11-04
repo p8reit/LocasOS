@@ -3,6 +3,7 @@ Description=LOCAS OS privileged local host agent
 After=locas-firstboot.service
 Requires=locas-firstboot.service
 [Service]
+EnvironmentFile=-/etc/locas/runtime.env
 Type=simple
 User=locas-agent
 Group=locas-agent

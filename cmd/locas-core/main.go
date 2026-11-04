@@ -15,6 +15,7 @@ import (
 
 	"github.com/p8reit/LocasOS/internal/admin"
 	"github.com/p8reit/LocasOS/internal/agentclient"
+	"github.com/p8reit/LocasOS/internal/appmanager"
 	"github.com/p8reit/LocasOS/internal/auditlog"
 	"github.com/p8reit/LocasOS/internal/auditop"
 	"github.com/p8reit/LocasOS/internal/server"
@@ -142,6 +143,7 @@ func appProxy(w http.ResponseWriter, r *http.Request, socket, method, path strin
 }
 
 func coreRoutes(admins *admin.Manager, socket string, updates *updatesController) http.Handler {
+	runtimeBase, runtimeConfigErr := appmanager.RuntimeEndpoint()
 	mux := http.NewServeMux()
 	mux.Handle("/", server.NewHandler("locas-core"))
 	mux.HandleFunc("GET /brand/icon.webp", func(w http.ResponseWriter, r *http.Request) {
@@ -258,10 +260,14 @@ func coreRoutes(admins *admin.Manager, socket string, updates *updatesController
 		}
 		// The target is fixed at loopback inside LocasOS. No user-defined URLs,
 		// arbitrary proxying, model downloads or runtime mutations.
+		if runtimeConfigErr != nil || !appmanager.RuntimeReady(r.Context()) {
+			sendJSON(w, 200, map[string]any{"ollama": "unavailable", "models": []string{}, "scope": "LocasOS"})
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 		client := &http.Client{Timeout: 2 * time.Second}
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:11434/api/tags", nil)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, runtimeBase+"/api/tags", nil)
 		resp, err := client.Do(req)
 		if err != nil {
 			sendJSON(w, http.StatusOK, map[string]any{"ollama": "unavailable", "models": []string{}, "scope": "LocasOS"})
@@ -314,11 +320,15 @@ func coreRoutes(admins *admin.Manager, socket string, updates *updatesController
 			http.Error(w, "model not approved for preview", http.StatusBadRequest)
 			return
 		}
+		if runtimeConfigErr != nil || !appmanager.RuntimeReady(r.Context()) {
+			http.Error(w, "local Ollama service/API is not ready", 503)
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Minute)
 		defer cancel()
 		client := &http.Client{Timeout: 15 * time.Minute}
 		body, _ := json.Marshal(map[string]any{"model": payload.Model, "stream": false})
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "http://127.0.0.1:11434/api/pull", strings.NewReader(string(body)))
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, runtimeBase+"/api/pull", strings.NewReader(string(body)))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := client.Do(req)
 		if err != nil {
@@ -369,10 +379,14 @@ func coreRoutes(admins *admin.Manager, socket string, updates *updatesController
 			http.Error(w, "invalid model", http.StatusBadRequest)
 			return
 		}
+		if runtimeConfigErr != nil || !appmanager.RuntimeReady(r.Context()) {
+			http.Error(w, "local Ollama service/API is not ready", 503)
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 		defer cancel()
 		data, _ := json.Marshal(map[string]any{"model": payload.Model, "stream": false, "messages": []map[string]string{{"role": "user", "content": payload.Prompt}}, "options": map[string]int{"num_predict": 256}})
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "http://127.0.0.1:11434/api/chat", strings.NewReader(string(data)))
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, runtimeBase+"/api/chat", strings.NewReader(string(data)))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := (&http.Client{Timeout: 90 * time.Second}).Do(req)
 		if err != nil {
@@ -413,12 +427,21 @@ func coreRoutes(admins *admin.Manager, socket string, updates *updatesController
 			return
 		}
 		var body struct {
-			App string `json:"app"`
+			App               string `json:"app"`
+			AcknowledgeStatus string `json:"acknowledge_status,omitempty"`
 		}
 		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&body); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if !appmanager.ValidAcknowledgement(body.AcknowledgeStatus) {
+			http.Error(w, "invalid status acknowledgement", 400)
+			return
+		}
+		if dec.Decode(new(any)) != io.EOF {
+			http.Error(w, "bad request", 400)
 			return
 		}
 		if body.App != "ollama" && body.App != "open-webui" {

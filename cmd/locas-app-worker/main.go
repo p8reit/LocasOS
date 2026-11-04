@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strconv"
@@ -28,10 +27,21 @@ type worker struct {
 	queueUID    uint32
 	recorder    auditlog.Recorder
 	execute     executor
-	installed   func() bool
+	ollamaReady func(context.Context) bool
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--validate-runtime-host" {
+		if _, err := appmanager.RuntimeEndpoint(); err != nil {
+			fmt.Fprintln(os.Stderr, "invalid local runtime configuration")
+			os.Exit(1)
+		}
+		return
+	}
+	if len(os.Args) != 1 {
+		fmt.Fprintln(os.Stderr, "unsupported app worker arguments")
+		os.Exit(2)
+	}
 	if os.Geteuid() != 0 {
 		fmt.Fprintln(os.Stderr, "app worker requires root")
 		os.Exit(1)
@@ -52,13 +62,8 @@ func main() {
 		os.Exit(1)
 	}
 	w := worker{requestPath: "/var/lib/locas/app-install.request", statusDir: "/var/lib/locas-apps", queueUID: uint32(uid), recorder: journal,
-		execute: func(ctx context.Context, path string, args ...string) error {
-			return exec.CommandContext(ctx, path, args...).Run()
-		},
-		installed: func() bool {
-			st, err := os.Stat("/usr/local/bin/ollama")
-			return err == nil && st.Mode().IsRegular() && st.Mode().Perm()&0111 != 0
-		}}
+		execute: runCommand, ollamaReady: appmanager.RuntimeOwnedReady}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 44*time.Minute)
 	defer cancel()
 	if w.run(ctx) != nil {
@@ -149,6 +154,7 @@ func (w *worker) run(ctx context.Context) error {
 	}
 	if err := syncDir(filepath.Dir(w.requestPath)); err != nil {
 		_ = finish("uncertain")
+		_ = w.failureStatus("uncertain", req.App, "queue-durability", state.Attribution.CorrelationID)
 		return errors.New("app request consume durability unavailable")
 	}
 	if err := w.writeStatus("installing:" + req.App); err != nil {
@@ -157,18 +163,26 @@ func (w *worker) run(ctx context.Context) error {
 	}
 	executeErr := w.install(ctx, req.App)
 	if executeErr != nil {
-		// An executor error can follow partial package, service or data changes.
-		// We cannot prove a rollback; record uncertainty rather than no effect.
-		if err := finish("uncertain"); err != nil {
-			_ = w.writeStatus("uncertain:" + req.App)
+		failure := &installFailure{reason: "installer-failed", exitCode: -1, mayHaveEffects: true}
+		var typed *installFailure
+		if errors.As(executeErr, &typed) {
+			failure = typed
+		}
+		outcome := "failed"
+		if failure.mayHaveEffects {
+			outcome = "uncertain"
+		}
+		logInstallFailure(req.App, state.Attribution.CorrelationID, outcome, failure)
+		if err := finish(outcome); err != nil {
+			_ = w.failureStatus("uncertain", req.App, "audit-outcome", state.Attribution.CorrelationID)
 			return errors.New("audit failure after installer failure")
 		}
-		_ = w.writeStatus("uncertain:" + req.App)
-		return errors.New("application installation outcome uncertain")
+		_ = w.failureStatus(outcome, req.App, failure.reason, state.Attribution.CorrelationID)
+		return errors.New("application installation did not complete; inspect classified worker stage")
 	}
 	// Never expose installed status until the outcome is durable.
 	if err := finish("succeeded"); err != nil {
-		_ = w.writeStatus("uncertain:" + req.App)
+		_ = w.failureStatus("uncertain", req.App, "audit-outcome", state.Attribution.CorrelationID)
 		return errors.New("audit outcome unavailable after installer")
 	}
 	return w.writeStatus("installed:" + req.App)
@@ -176,23 +190,28 @@ func (w *worker) run(ctx context.Context) error {
 func (w *worker) install(ctx context.Context, app string) error {
 	switch app {
 	case "ollama":
-		if w.installed != nil && w.installed() {
-			if err := w.execute(ctx, "/usr/bin/systemctl", "enable", "--now", "locas-ollama.service"); err != nil {
-				return err
-			}
-		} else {
-			if err := w.execute(ctx, "/usr/local/sbin/locas-install-ollama"); err != nil {
-				return err
-			}
+		// The fixed installer validates both binary and runner even for existing
+		// runtimes, preserves data, and performs bounded service/API readiness.
+		if err := w.execute(ctx, "/usr/local/sbin/locas-install-ollama"); err != nil {
+			return classifyFailure(err, "ollama-preflight", true)
 		}
-		return w.execute(ctx, "/usr/bin/systemctl", "is-active", "--quiet", "locas-ollama.service")
+		if err := w.execute(ctx, "/usr/bin/systemctl", "is-active", "--quiet", "locas-ollama.service"); err != nil {
+			return classifyFailure(err, "ollama-service", true)
+		}
+		return nil
 	case "open-webui":
 		if err := w.execute(ctx, "/usr/bin/systemctl", "is-active", "--quiet", "locas-ollama.service"); err != nil {
-			return err
+			return classifyFailure(err, "ollama-required", false)
 		}
-		return w.execute(ctx, "/usr/local/sbin/locas-install-open-webui")
+		if w.ollamaReady == nil || !w.ollamaReady(ctx) {
+			return &installFailure{reason: "ollama-required", exitCode: -1, mayHaveEffects: false}
+		}
+		if err := w.execute(ctx, "/usr/local/sbin/locas-install-open-webui"); err != nil {
+			return classifyFailure(err, "webui-preflight", true)
+		}
+		return nil
 	}
-	return errors.New("unsupported application")
+	return &installFailure{reason: "installer-failed", exitCode: -1, mayHaveEffects: false}
 }
 func syncDir(path string) error {
 	f, err := os.Open(path)
