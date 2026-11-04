@@ -2,6 +2,7 @@
 Description=LOCAS OS explicitly approved application installer
 After=locas-firstboot.service
 [Service]
+EnvironmentFile=-/etc/locas/runtime.env
 Type=oneshot
 User=root
 ExecStart=/opt/locas/bin/locas-app-worker

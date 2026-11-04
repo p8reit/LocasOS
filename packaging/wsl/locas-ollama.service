@@ -11,6 +11,8 @@ Environment=OLLAMA_NOHISTORY=1
 Environment=HOME=/var/lib/locas-ollama
 StateDirectory=locas-ollama
 StateDirectoryMode=0700
+EnvironmentFile=-/etc/locas/runtime.env
+ExecStartPre=/opt/locas/bin/locas-app-worker --validate-runtime-host
 ExecStart=/usr/local/bin/ollama serve
 Restart=on-failure
 RestartSec=3

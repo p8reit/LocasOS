@@ -29,3 +29,7 @@ Windows browser reaches workspace, distinct login is explained, local inference 
 ## Resume and handoff
 
 Read [project index](../README.md), [review](../REVIEW.md), [parallel work rules](../PARALLEL_WORK.md) and the linked source before edits. Assign an issue, owner and file reservation; record tested commit, commands/results, blockers and next action here after work. No live assignment was established by this review.
+
+## LOS-130 runtime installation follow-up
+
+See [runtime failure ledger](../APP_INSTALL_FAILURE-LOS-130.md) and [troubleshooting](../../docs/testing/APP_INSTALL_TROUBLESHOOTING.md). Operator evidence identifies a Windows Ollama port collision; historical WSL import success does not qualify runtime/application acceptance. Source fixes add classified failures, explicit uncertain-retry acknowledgement, health checks, Docker CLI packaging and controlled appliance loopback configuration. Data and audit preservation remain mandatory. Implementation is pending PR/CI/review; deployment recovery, model inference and WebUI persistence retests remain outstanding.

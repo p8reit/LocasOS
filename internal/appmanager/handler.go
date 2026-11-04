@@ -1,6 +1,7 @@
 package appmanager
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/p8reit/LocasOS/internal/auditop"
@@ -8,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -25,11 +25,17 @@ func (r Request) Validate() error {
 }
 
 type Manager struct {
-	Dir string
-	mu  sync.Mutex
+	Dir           string
+	StatusPath    string
+	BinaryPath    string
+	WorkspacePath string
+	Ready         func(context.Context) bool
+	mu            sync.Mutex
 }
 
-func New(dir string) *Manager { return &Manager{Dir: dir} }
+func New(dir string) *Manager {
+	return &Manager{Dir: dir, StatusPath: "/var/lib/locas-apps/app-install.status", BinaryPath: "/usr/local/bin/ollama", WorkspacePath: "/var/lib/locas-open-webui/data", Ready: RuntimeReady}
+}
 
 func (m *Manager) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -38,28 +44,21 @@ func (m *Manager) Handler() http.Handler {
 	return mux
 }
 
-func readStatus(path string) string {
-	bytes, err := os.ReadFile(path)
-	if err != nil {
-		return "idle"
-	}
-	s := strings.TrimSpace(string(bytes))
-	if len(s) > 100 {
-		return "unknown"
-	}
-	return s
-}
-
 func (m *Manager) status(w http.ResponseWriter, r *http.Request) {
-	status := readStatus("/var/lib/locas-apps/app-install.status")
-	_, ollamaErr := os.Stat("/usr/local/bin/ollama")
-	_, webuiErr := os.Stat("/var/lib/locas-open-webui/data")
+	status := ReadStatus(m.StatusPath)
+	binary, ollamaErr := os.Stat(m.BinaryPath)
+	binaryPresent := ollamaErr == nil && binary.Mode().IsRegular() && binary.Mode().Perm()&0111 != 0
+	workspace, webuiErr := os.Stat(m.WorkspacePath)
+	workspaceState := "unknown"
+	if webuiErr == nil && workspace.IsDir() {
+		workspaceState = "present"
+	} else if os.IsNotExist(webuiErr) {
+		workspaceState = "absent"
+	}
+	ready := m.Ready != nil && m.Ready(r.Context())
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"job":                    status,
-		"ollama_installed":       ollamaErr == nil,
-		"workspace_data_present": webuiErr == nil,
-	})
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{"job": status.Job, "state": status.State, "app": status.App, "reason": status.Reason, "correlation_id": status.CorrelationID, "status_token": status.StatusToken, "ollama_installed": binaryPresent, "ollama_ready": ready, "workspace_data_present": workspaceState == "present", "workspace_state": workspaceState})
 }
 
 func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +70,8 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		App string `json:"app"`
+		App               string `json:"app"`
+		AcknowledgeStatus string `json:"acknowledge_status,omitempty"`
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
 	dec.DisallowUnknownFields()
@@ -87,6 +87,10 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unsupported application", 400)
 		return
 	}
+	if !ValidAcknowledgement(body.AcknowledgeStatus) {
+		http.Error(w, "invalid status acknowledgement", 400)
+		return
+	}
 	state.App = body.App
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -95,9 +99,25 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request := filepath.Join(m.Dir, "app-install.request")
-	statusPath := "/var/lib/locas-apps/app-install.status"
-	if data, err := os.ReadFile(statusPath); err == nil && strings.HasPrefix(string(data), "installing:") {
+	current := ReadStatus(m.StatusPath)
+	if current.State == "installing" {
 		http.Error(w, "installation already running", 409)
+		return
+	}
+	if current.State == "unknown" {
+		http.Error(w, "installation status unavailable; inspect worker state before retrying", 503)
+		return
+	}
+	if current.State == "uncertain" && body.AcknowledgeStatus != current.StatusToken {
+		http.Error(w, "previous installation outcome uncertain; inspect and acknowledge its current status before retrying", 409)
+		return
+	}
+	if body.App == "open-webui" && (m.Ready == nil || !m.Ready(r.Context())) {
+		http.Error(w, "Ollama service/API is not ready; inspect Ollama before installing Open WebUI", 409)
+		return
+	}
+	if ReadStatus(m.StatusPath) != current {
+		http.Error(w, "installer status changed; refresh before retrying", 409)
 		return
 	}
 	temp := filepath.Join(m.Dir, "app-install.queue.tmp")
@@ -118,6 +138,11 @@ func (m *Manager) install(w http.ResponseWriter, r *http.Request) {
 	if writeErr != nil || closeErr != nil {
 		_ = os.Remove(temp)
 		http.Error(w, "queue failed", 503)
+		return
+	}
+	if ReadStatus(m.StatusPath) != current {
+		_ = os.Remove(temp)
+		http.Error(w, "installer status changed; refresh before retrying", 409)
 		return
 	}
 	if err := os.Link(temp, request); err != nil {

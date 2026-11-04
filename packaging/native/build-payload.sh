@@ -34,7 +34,7 @@ for f in firstboot.sh locas-app-worker.sh install-ollama.sh install-open-webui.s
   esac
   install -m 0755 "packaging/wsl/$f" "$stage/usr/local/sbin/$target"
 done
-for f in locas-firstboot.service locas-agent.service locas-core.service locas-app-worker.service locas-app-worker.path locas-update-worker.service locas-update-worker.path; do
+for f in locas-ollama.service locas-firstboot.service locas-agent.service locas-core.service locas-app-worker.service locas-app-worker.path locas-update-worker.service locas-update-worker.path; do
   install -m 0644 "packaging/wsl/$f" "$stage/etc/systemd/system/$f"
 done
 tar -C "$stage" -cf dist/native/locasos-native-payload-amd64.tar opt usr etc

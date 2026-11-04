@@ -5,6 +5,7 @@ import tarfile
 from pathlib import PurePosixPath
 
 ALLOWED_FILES = {
+    "etc/systemd/system/locas-ollama.service",
     "opt/locas/bin/locas-core",
     "opt/locas/bin/locas-agent",
     "opt/locas/bin/locas-updater",

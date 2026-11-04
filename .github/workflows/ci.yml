@@ -34,6 +34,8 @@ jobs:
           find scripts packaging/wsl -type f -name '*.sh' -print0 2>/dev/null | xargs -0 -r -n1 bash -n
       - name: Upgrade recovery and archive safety
         run: python3 tests/upgrade-recovery.test.py
+      - name: Runtime installer regressions
+        run: python3 tests/runtime-installers.test.py
   dashboard:
     runs-on: ubuntu-24.04
     steps:

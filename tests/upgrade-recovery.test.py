@@ -38,6 +38,10 @@ class UpgradeTest(unittest.TestCase):
             p = self.root / name
             p.write_bytes(data)
             p.chmod(0o755 if name.startswith(('opt/', 'usr/')) else 0o640)
+        self.runtime = self.root / 'etc/locas/runtime.env'
+        self.runtime.parent.mkdir(parents=True)
+        self.runtime.write_bytes(b'OLLAMA_HOST=127.0.0.1:11435\n')
+        self.runtime.chmod(0o600)
         self.data = self.root / 'var/lib/models/model.bin'
         self.data.parent.mkdir(parents=True)
         self.data.write_bytes(b'valuable-model')
@@ -113,11 +117,28 @@ exit 0''')
         self.assertEqual(self.data.read_bytes(), b'valuable-model')
 
     def assert_audit_preserved(self):
+        self.assertEqual(self.runtime.read_bytes(), b'OLLAMA_HOST=127.0.0.1:11435\n')
+        self.assertEqual(self.runtime.stat().st_mode & 0o777, 0o600)
         for directory in self.audit_dirs:
             self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
             journal = directory / 'events.jsonl'
             self.assertEqual(journal.read_bytes(), b'private-existing-audit')
             self.assertEqual(journal.stat().st_mode & 0o777, 0o600)
+
+    def test_runtime_config_cannot_be_supplied_by_upgrade(self):
+        self.bundle({'etc/locas/runtime.env': b'OLLAMA_HOST=0.0.0.0:11434'})
+        self.assertNotEqual(self.run_upgrade().returncode, 0)
+        self.assert_restored()
+
+    def test_ollama_unit_upgrade_and_rollback(self):
+        unit = 'etc/systemd/system/locas-ollama.service'
+        self.bundle({unit: b'new-ollama-unit'})
+        self.assertNotEqual(self.run_upgrade(FAIL_RESTART='1').returncode, 0)
+        self.assertFalse((self.root/unit).exists())
+        self.assert_restored()
+        self.assertEqual(self.run_upgrade().returncode, 0)
+        self.assertEqual((self.root/unit).read_bytes(), b'new-ollama-unit')
+        self.assert_audit_preserved()
 
     def test_rejects_audit_journal_payload(self):
         for path in ('var/lib/locas-audit/app-worker/events.jsonl',

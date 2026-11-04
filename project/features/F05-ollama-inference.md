@@ -39,3 +39,7 @@ Removed the corrupted duplicated installer block, restored the exact runner mani
 Validation: `bash -n` passed for all nine shell scripts. A temporary harness executed the installer's actual manifest-validation block against six fixtures: plain paths and ./ paths accepted; missing binary, missing runner, runner suffix and wrong-directory runner rejected. No download, privileged installation or service operation ran. Agent model usage/cost metrics unavailable.
 
 Next action: attach these changes to an issue-linked draft PR, then validate clean WSL install, model pull and inference after reboot. Runtime artifact pinning and independent security review remain open; syntax/fixture success does not establish runtime trust or Windows readiness.
+
+## LOS-130 runtime installation follow-up
+
+See [runtime failure ledger](../APP_INSTALL_FAILURE-LOS-130.md) and [troubleshooting](../../docs/testing/APP_INSTALL_TROUBLESHOOTING.md). Operator evidence identifies a Windows Ollama port collision; historical WSL import success does not qualify runtime/application acceptance. Source fixes add classified failures, explicit uncertain-retry acknowledgement, health checks, Docker CLI packaging and controlled appliance loopback configuration. Data and audit preservation remain mandatory. Implementation is pending PR/CI/review; deployment recovery, model inference and WebUI persistence retests remain outstanding.

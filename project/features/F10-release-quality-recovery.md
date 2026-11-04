@@ -43,3 +43,7 @@ P09G source integration and independent review are complete; local validation an
 ## Deployment test guides — LOS-128
 
 The [test deployment hub](../../docs/TEST_DEPLOYMENTS.md) links current-source WSL development testing, physical-host read-only readiness/diskless VM testing and a reusable acceptance record. Commands/provenance are reviewed against actual scripts and workflows; documentation checks are not evidence of Windows, physical installation, GPU inference or recovery qualification. Physical native installation is still blocked by missing installer/lifecycle gates. P10A merged as PR #127 (`a91e9e2`) and remains an internal metadata foundation without live dispatch/API/UI. See [guide execution ledger](../DEPLOYMENT_TESTING-LOS-128.md).
+
+## LOS-130 runtime installation follow-up
+
+See [runtime failure ledger](../APP_INSTALL_FAILURE-LOS-130.md) and [troubleshooting](../../docs/testing/APP_INSTALL_TROUBLESHOOTING.md). Operator evidence identifies a Windows Ollama port collision; historical WSL import success does not qualify runtime/application acceptance. Source fixes add classified failures, explicit uncertain-retry acknowledgement, health checks, Docker CLI packaging and controlled appliance loopback configuration. Data and audit preservation remain mandatory. Implementation is pending PR/CI/review; deployment recovery, model inference and WebUI persistence retests remain outstanding.

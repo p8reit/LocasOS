@@ -44,3 +44,5 @@ For PR builds, the PR head SHA and the synthetic merge SHA used by checkout/`GIT
 P10A stores metadata/reservations only; it does not stop an orphan GPU process or execute queued payloads. See [queue contract](architecture/compute-queue.md). P09G local chains cannot defeat root/writer history replacement without independent anchors; see [audit operations](security/auditing.md). A healthy development appliance is not proof of signed update qualification, actual GPU inference, physical installation, power-loss recovery or product release readiness.
 
 No procedure here publishes a release, replaces the host OS, changes production trust keys, erases a disk, registers physical boot media, or automatically unregisters a WSL distro. Those actions require their own implementation/readiness and explicit operator decisions. The guides were source-reviewed; actual Windows/WSL/hardware results must come from your recorded execution.
+
+For uncertain Ollama/WebUI installation results, follow [application installation troubleshooting](testing/APP_INSTALL_TROUBLESHOOTING.md).
