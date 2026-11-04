@@ -9,7 +9,8 @@ test "$expected" = "$actual"
 for member in opt/locas/bin/locas-core opt/locas/bin/locas-agent opt/locas/bin/locas-updater \
   etc/systemd/system/locas-firstboot.service etc/systemd/system/locas-agent.service \
   etc/systemd/system/locas-core.service usr/local/sbin/locas-firstboot; do
-  tar -tf "$archive" | grep -Fxq "$member" || { echo "Missing $member" >&2; exit 1; }
+  # Consume the full listing: grep -q can close early and SIGPIPE tar under pipefail.
+  tar -tf "$archive" | grep -Fx "$member" >/dev/null || { echo "Missing $member" >&2; exit 1; }
 done
 python3 "$(dirname "$0")/verify-archive.py" "$archive"
 echo "PASS: native VM payload checksum and mandatory contents"
