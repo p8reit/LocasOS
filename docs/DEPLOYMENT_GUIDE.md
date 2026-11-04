@@ -2,6 +2,8 @@
 
 > **Status:** Windows 11 + WSL2 is the supported installation target in this guide. Signed WSL fresh-install packaging was merged in PR #74. Use only a release whose complete rootfs and installer asset inventory is verified; tags alone do not guarantee installation completeness. **There is no bootable native/bare-metal ISO yet.** Do not treat a WSL rootfs tar as a bootable USB image.
 
+For testing current merged source, start with the [development test deployment hub](TEST_DEPLOYMENTS.md), [WSL guide](testing/WSL_DEPLOYMENT.md), [physical-host/VM guide](testing/PHYSICAL_HOST.md) and [acceptance record](testing/ACCEPTANCE_RESULTS.md). The release procedure below qualifies an explicitly selected published release, which may predate newer merged features.
+
 ## 1. Choose a deployment route
 
 | Route | Intended use | State |

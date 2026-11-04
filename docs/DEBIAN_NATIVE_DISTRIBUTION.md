@@ -2,6 +2,8 @@
 
 LocasOS is moving toward its own independently branded Debian-derived headless appliance OS. The first image factory produces a **developer live ISO only**, not a disk installer or a product release.
 
+For read-only physical-host readiness and interactive diskless QEMU checks, use the [physical-host test guide](testing/PHYSICAL_HOST.md). It does not supply physical USB writing or disk-install steps; [record actual results](testing/ACCEPTANCE_RESULTS.md) separately from CI process-survival checks.
+
 ## First implementation
 - Debian `live-build`, Debian trixie (Debian 13), amd64, hybrid ISO with EFI boot metadata.
 - LocasOS release identity and branding, developer payload staged as data only.

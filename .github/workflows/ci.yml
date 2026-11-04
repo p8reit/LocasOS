@@ -51,6 +51,40 @@ jobs:
         run: |
           test -f project/AGENT_POLICY.md
           test -f docs/adr/0001-platform-foundation.md
+      - name: Deployment guide links and Bash examples (parse only)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+          documents = [Path('docs/TEST_DEPLOYMENTS.md'), *Path('docs/testing').glob('*.md')]
+          for document in documents:
+              source = document.read_text()
+              assert len(re.findall(r'^```', source, re.M)) % 2 == 0, document
+              for target in re.findall(r'\]\(([^)]+)\)', source):
+                  if '://' not in target and not target.startswith('#'):
+                      assert (document.parent / target.split('#')[0]).exists(), (document, target)
+              for example in re.findall(r'^```bash\r?\n(.*?)^```\s*$', source, re.M | re.S):
+                  subprocess.run(['bash', '-n'], input=example, text=True, check=True)
+          print('PASS: deployment guide links and Bash syntax; no examples executed')
+          PY
+      - name: Deployment guide PowerShell examples (parse only)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $count = 0
+          foreach ($document in (Get-ChildItem docs/testing -Filter '*.md')) {
+              $source = Get-Content -LiteralPath $document.FullName -Raw
+              foreach ($example in [regex]::Matches($source, '(?ms)^```powershell\r?\n(.*?)^```\s*$')) {
+                  $tokens = $null
+                  $parseErrors = $null
+                  [void][System.Management.Automation.Language.Parser]::ParseInput($example.Groups[1].Value, [ref]$tokens, [ref]$parseErrors)
+                  if ($parseErrors.Count -gt 0) { throw "$($document.Name): $($parseErrors | Out-String)" }
+                  $count++
+              }
+          }
+          if ($count -eq 0) { throw 'No PowerShell examples found' }
+          Write-Host "PASS: $count PowerShell examples parsed; none executed"
   appliance-package:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
