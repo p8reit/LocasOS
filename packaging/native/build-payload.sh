@@ -22,6 +22,9 @@ go build -trimpath -ldflags="-s -w" -o build/locas-audit ./cmd/locas-audit
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/opt/locas/bin" "$stage/usr/local/sbin" "$stage/etc/systemd/system"
+# These directories overlay the guest's system directories during extraction.
+# Do not archive the restrictive build umask onto /etc or /usr.
+find "$stage/opt" "$stage/usr" "$stage/etc" -type d -exec chmod 0755 {} +
 install -m 0755 build/locas-core build/locas-agent build/locas-updater build/locas-app-worker build/locas-audit "$stage/opt/locas/bin/"
 for f in firstboot.sh locas-app-worker.sh install-ollama.sh install-open-webui.sh repair-ollama.sh upgrade-locas.sh; do
   case "$f" in

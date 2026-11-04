@@ -73,5 +73,37 @@ class ArchiveTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             module.verify(self.make_tar(item))
 
+class DirectoryPermissions(unittest.TestCase):
+    def verify_fixture(self, overrides=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "payload.tar"
+            with tarfile.open(path, "w") as tf:
+                for name in sorted(module.ALLOWED_DIRS - {""}):
+                    member = tarfile.TarInfo(name)
+                    member.type = tarfile.DIRTYPE
+                    member.mode = (overrides or {}).get(name, 0o755)
+                    tf.addfile(member)
+                for name in sorted(module.ALLOWED_FILES):
+                    member = tarfile.TarInfo(name)
+                    member.mode = 0o644
+                    tf.addfile(member, io.BytesIO())
+            module.verify(str(path))
+
+    def test_public_system_directories_accepted(self):
+        self.verify_fixture()
+
+    def test_build_umask_cannot_restrict_guest_directories(self):
+        for name in sorted(module.ALLOWED_DIRS - {""}):
+            with self.subTest(directory=name):
+                with self.assertRaisesRegex(ValueError, "mode 0755"):
+                    self.verify_fixture({name: 0o750})
+
+    def test_writable_or_special_directory_modes_rejected(self):
+        for mode in (0o777, 0o775, 0o2755, 0o4755):
+            with self.subTest(mode=oct(mode)):
+                with self.assertRaisesRegex(ValueError, "mode 0755"):
+                    self.verify_fixture({"etc": mode})
+
+
 if __name__ == "__main__":
     unittest.main()
