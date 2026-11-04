@@ -19,7 +19,7 @@ Workers used disjoint files. Actual provider-internal model routing and token/co
 
 ## Decisions and guardrails
 
-Clean Windows VM/spare machine is the default development WSL route because current standard helpers only accept `LocasOS`/59420. Signed side-by-side release helper limitations are documented, including transient first-launch default port and host-scoped cookies. Require a separate browser profile. Distinguish signed release/rootfs, unsigned Actions artifact, upgrade tar and developer ISO. PR head and synthetic merge SHAs differ; main build provenance is preferred for merged-source acceptance. Document expiry and fresh-build selection rather than stale run IDs.
+Clean Windows VM/spare machine is the default development WSL route because current standard helpers only accept `LocasOS`/59420. Standard and test task helpers' existing ExecutionPolicy arguments are disclosed for host-policy review before import. Signed side-by-side release helper limitations are documented, including transient first-launch default port and host-scoped cookies. Require a separate browser profile. Distinguish signed release/rootfs, unsigned Actions artifact, upgrade tar and developer ISO. PR head and synthetic merge SHAs differ; main build provenance is preferred for merged-source acceptance. Document expiry and fresh-build selection rather than stale run IDs.
 
 Native guide permits only read-only host inventory and an isolated graphical, diskless/networkless QEMU guest with fresh firmware variables, no passthrough/shares/forwarding. It provides guest-local HTTP/UID checks, preserves loopback, does not assume default credentials/sudo/SSH, and verifies disabled worker paths. Physical installer/authentication/recovery/GPU gates remain open.
 

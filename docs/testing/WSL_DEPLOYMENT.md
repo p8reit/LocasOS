@@ -95,6 +95,8 @@ The SHA-256 check detects a changed archive relative to its checksum. Build meta
 
 ## Import and first health checks
 
+The standard `Enable-LocasOS-Autostart.ps1` and `Repair-LocasOS-Autostart.ps1` helpers, as well as the separate test keepalive helper, currently register tasks with `-ExecutionPolicy Bypass`. Review whether your host policy permits that existing helper behavior **before import**. This guide does not authorize defeating managed policy: if the task arrangement is not approved, record it as blocked and use an approved signing/execution arrangement or another prepared test machine. Do not change policy or patch helper gates to force a pass.
+
 Review the downloaded scripts. Only unblock files after checking their origin and use the host's permitted execution policy; do not disable managed policy to run this guide. Then, from the complete extracted artifact directory:
 
 ```powershell
