@@ -16,13 +16,15 @@ jobs:
       - name: Go tests
         run: |
           if [ -f go.mod ]; then go test ./...; else echo "Go scaffold pending: tracked in LOS-002"; fi
-      - name: Security audit and approval race checks
-        run: go test -race ./internal/auditlog ./internal/auditop ./internal/admin ./internal/peercred ./internal/appmanager ./internal/updateapproval ./internal/updatequeue ./internal/updatetrust ./cmd/locas-core ./cmd/locas-agent ./cmd/locas-updater ./cmd/locas-app-worker
+      - name: Durable queue without CGO
+        run: CGO_ENABLED=0 go test ./internal/jobqueue ./tests/jobqueue
+      - name: Security audit, queue and approval race checks
+        run: go test -race ./internal/auditlog ./internal/auditop ./internal/admin ./internal/peercred ./internal/appmanager ./internal/updateapproval ./internal/updatequeue ./internal/updatetrust ./cmd/locas-core ./cmd/locas-agent ./cmd/locas-updater ./cmd/locas-app-worker ./internal/jobqueue ./tests/jobqueue
       - name: Build identity and actual binary metadata
         run: LOCAS_TEST_GO="$(command -v go)" python3 tests/build-identity.test.py
       - name: Go formatting
         run: |
-          if [ -f go.mod ]; then files="$(gofmt -l ./cmd ./internal)"; printf "%s\\n" "$files"; if [ -n "$files" ]; then gofmt -d ./cmd ./internal; exit 1; fi; fi
+          if [ -f go.mod ]; then files="$(gofmt -l ./cmd ./internal ./tests/jobqueue)"; printf "%s\\n" "$files"; if [ -n "$files" ]; then gofmt -d ./cmd ./internal ./tests/jobqueue; exit 1; fi; fi
   shell:
     runs-on: ubuntu-24.04
     steps:
