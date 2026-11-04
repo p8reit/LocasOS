@@ -53,6 +53,10 @@ See [Debian native distribution](docs/DEBIAN_NATIVE_DISTRIBUTION.md), [Native Ph
 
 Go source lives under `cmd/` and `internal/`. WSL packaging is in `packaging/wsl/`; native VM experimentation is in `packaging/native/`, and the Debian image factory is in `packaging/debian/`. Build validation is provided by the CI, WSL Appliance Build, and Native VM Foundation workflows.
 
+## Test current development builds
+
+Use the [test deployment guides](docs/TEST_DEPLOYMENTS.md) for clean WSL testing, physical-host readiness/diskless native VM testing, and an acceptance record. Current native physical-disk installation remains unsupported; P10A queue tests run in a separate Linux developer checkout. A source merge does not update an installed appliance or publish a release.
+
 ## Project memory
 
 See the [feature index](project/README.md), [phase ledger](project/PHASES.md), [review findings](project/REVIEW.md) and [parallel work rules](project/PARALLEL_WORK.md). Historical review status is dated; current Debian/native deployment documents take precedence for product scope. Repository-wide agent instructions are in [AGENTS.md](AGENTS.md).

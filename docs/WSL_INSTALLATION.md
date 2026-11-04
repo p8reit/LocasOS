@@ -2,6 +2,8 @@
 
 The Windows 11/WSL2 appliance is a separate target from the planned native bootable LocasOS ISO. A WSL rootfs tar is **not** an ISO.
 
+To test current merged source rather than a published release, use the [WSL development deployment guide](testing/WSL_DEPLOYMENT.md). It documents the fixed default distro name, clean-target requirement, artifact provenance, audit checks and safe lifecycle testing.
+
 ## Windows installation workspace
 
 Use a Windows filesystem directory for each version. The bootstrap defaults to `%LOCALAPPDATA%\LocasOS\install\vX.Y.Z` and allows `-Workspace D:\LocasOS\install`. Release assets are not stored inside the WSL distribution. The registered WSL filesystem is separate from downloads and logs.

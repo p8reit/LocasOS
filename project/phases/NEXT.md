@@ -2,7 +2,7 @@
 
 Reviewed 2026-11-03 at `fb18e46`. This status records documentation and source evidence only; it is not deployment certification.
 
-**Status:** P10A source implementation is complete on `agent/backend/LOS-126`. It provides the durable storage/admission prerequisite; PR CI and separate human merge approval remain gates. F09 remains partial: the queue is not wired to a live executor, public API or UI, and no production/runtime acceptance has been established.
+**Status:** P10A merged as PR #127 at `a91e9e2`. It provides the durable storage/admission prerequisite; that source increment passed CI and human merge approval. F09 remains partial: the queue is not wired to a live executor, public API or UI, and no production/runtime acceptance has been established.
 
 ## Scope and feature context
 
@@ -10,7 +10,7 @@ Reviewed 2026-11-03 at `fb18e46`. This status records documentation and source e
 
 ## Remaining work and exit gate
 
-Verify exact PR CI/head and obtain merge approval for the storage foundation. Then integrate it with a live executor and authenticated API/UI as separately tracked work. Qualify cancellation, timeout, restart, retention, admission behavior and recovery against the exact source and artifact before claiming F09 completion.
+The storage foundation merged in PR #127. Next integrate it with a live executor and authenticated API/UI as separately tracked work. Qualify cancellation, timeout, restart, retention, admission behavior and recovery against the exact source and artifact before claiming F09 completion.
 
 Local tests and independent review passed; exact source/check evidence is recorded in P10A and the issue-linked PR. See the [P10A issue ledger](P10A.md) for ownership and current evidence.
 

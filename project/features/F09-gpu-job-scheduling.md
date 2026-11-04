@@ -2,7 +2,7 @@
 
 Reviewed 2026-11-03 against base `fb18e46` and the P10A work ledger. Status reflects inspected source evidence, not deployment certification.
 
-**Status: PARTIAL.** P10A (LOS-126) implements the durable storage and cooperative admission foundation; source review/local checks are complete, matching PR CI/merge approval remain separate. The queue is not yet connected to a live executor, public API or UI. No runtime scheduling, GPU cancellation or production behavior is claimed.
+**Status: PARTIAL.** P10A (LOS-126) implements the durable storage and cooperative admission foundation; merged as PR #127 (`a91e9e2`) after CI and human approval. The queue is not yet connected to a live executor, public API or UI. No runtime scheduling, GPU cancellation or production behavior is claimed.
 
 **Suggested owners:** A4 GPU and A2 Backend. **Phase:** [P10A](../phases/P10A.md), followed by separately scoped runtime/API/UI integration and qualification. **Dependencies:** F02, F03, F05, plus the P10A storage contract.
 
@@ -20,7 +20,7 @@ LOS-126 ledger: [P10A](../phases/P10A.md). Local source validation and independe
 
 ## Remaining work
 
-Obtain matching CI and merge approval for P10A. Then implement a live dispatcher and authenticated, auditable job API/UI in separately tracked work. API integration must authorize requests and audit metadata access. Add runtime acceptance for cooperative contention, cancellation/timeout limits, restart without replay, and actual supported workload behavior.
+P10A passed CI and merged. Next implement a live dispatcher and authenticated, auditable job API/UI in separately tracked work. API integration must authorize requests and audit metadata access. Add runtime acceptance for cooperative contention, cancellation/timeout limits, restart without replay, and actual supported workload behavior.
 
 ## Operational and security limits
 
