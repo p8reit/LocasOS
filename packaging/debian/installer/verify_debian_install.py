@@ -11,12 +11,14 @@ import os
 from pathlib import Path
 import re
 import selectors
+import shlex
 import shutil
 import socket
 import subprocess
 import sys
 import tempfile
 import time
+import zlib
 
 from disposable_vm import checksum
 from guest_serial import StageEvidence
@@ -36,12 +38,16 @@ modprobe qemu_fw_cfg || refuse "qemu_fw_cfg unavailable"
 marker=/sys/firmware/qemu_fw_cfg/by_name/opt/locasos/dev-install/raw
 [ -r "$marker" ] || refuse "QEMU opt-in marker missing"
 [ "$(cat "$marker")" = LOCASOS_DISPOSABLE_VM_INSTALL_V1 ] || refuse "wrong QEMU opt-in marker"
+udevadm settle || refuse "udev discovery did not settle"
 set -- $(list-devices disk)
 [ "$#" -eq 1 ] || refuse "expected exactly one scratch disk"
 disk=$1
 base=${disk##*/}
 [ -b "$disk" ] || refuse "not a block device"
-[ "$(cat "/sys/class/block/$base/device/serial")" = locasos-scratch ] || refuse "wrong scratch serial"
+properties=$(udevadm info --query=property --name "$disk") || refuse "udev disk identity unavailable"
+printf '%s\n' "$properties" | grep -Fx 'ID_SERIAL_SHORT=locasos-scratch' >/dev/null || refuse "wrong scratch serial"
+printf '%s\n' "$properties" | grep -Fx 'ID_VENDOR=QEMU' >/dev/null || refuse "wrong scratch vendor"
+printf '%s\n' "$properties" | grep -Fx 'ID_MODEL=QEMU_HARDDISK' >/dev/null || refuse "wrong scratch model"
 [ "$(cat "/sys/class/block/$base/ro")" = 0 ] || refuse "read-only disk"
 sectors=$(cat "/sys/class/block/$base/size")
 case "$sectors" in ''|*[!0-9]*) refuse "unknown disk size" ;; esac
@@ -129,6 +135,76 @@ printf 'LOCASOS_VM_INSTALL_COMPLETE\n' >/dev/ttyS0
 '''
 
 
+def validate_boot_menu(directory):
+    """Check the shipped GRUB installer entries before bypassing GRUB in CI.
+
+    Support live-build's fixed installer include, or an inline installer entry.
+    This validates the distributed menu while the actual lifecycle test boots
+    the same kernel/initrd directly to supply a test-only, unattended preseed.
+    """
+    directory = Path(directory)
+    root = directory / "grub.cfg"
+    if not root.is_file() or root.is_symlink():
+        raise ValueError("ISO GRUB menu missing")
+    configs = {}
+    for path in directory.rglob("*.cfg"):
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("ISO GRUB config must be a regular file")
+        configs[path.relative_to(directory).as_posix()] = path.read_text(encoding="utf-8")
+    source_line = re.compile(r"(?m)^\s*source\s+['\"]?/boot/grub/install_start\.cfg['\"]?\s*$")
+    inline = re.compile(r"(?ims)^\s*menuentry\s+[^\n]*install[^\n]*\{(.*?)^\s*\}")
+    # Commented examples must not count as a bootable installer entry.
+    active_root = "\n".join(line for line in configs["grub.cfg"].splitlines()
+                              if not line.lstrip().startswith("#"))
+    sourced = bool(source_line.search(active_root))
+    inline_entries = inline.findall(active_root)
+    if not sourced and not inline_entries:
+        raise ValueError("GRUB has no wired installer entry")
+    if sourced:
+        if "install_start.cfg" not in configs:
+            raise ValueError("GRUB installer include missing")
+        disabled = re.compile(r"(?is)\bif\s+false\s*;?\s*then\b(?:(?!\bfi\b).)*"
+                              r"source\s+/boot/grub/install_start\.cfg")
+        if disabled.search(active_root):
+            raise ValueError("GRUB installer include is disabled")
+    checked_kernel = checked_initrd = 0
+    contents = [(name, body) for name, body in configs.items()
+                if Path(name).name.startswith("install")]
+    contents += [("inline installer", body) for body in inline_entries]
+    # Any installer kernel elsewhere in grub.cfg must meet the same contract.
+    contents += [("grub.cfg installer paths", "\n".join(
+        line for line in active_root.splitlines() if "/install/" in line))]
+    for name, body in contents:
+        for line in body.splitlines():
+            try:
+                words = shlex.split(line, comments=True)
+            except ValueError as error:
+                raise ValueError("invalid GRUB installer syntax: " + name) from error
+            if not words:
+                continue
+            if words[0] in ("linux", "linuxefi", "linux16"):
+                if len(words) < 2 or words[1] != "/install/vmlinuz":
+                    raise ValueError("GRUB installer uses an unexpected kernel: " + name)
+                for argument in words[2:]:
+                    if ("preseed" in argument or argument.startswith(("url=", "file="))
+                            or "://" in argument):
+                        raise ValueError("GRUB installer overrides embedded preseed: " + name)
+                checked_kernel += 1
+            elif words[0] in ("initrd", "initrdefi", "initrd16"):
+                if words[1:] != ["/install/initrd.gz"]:
+                    raise ValueError("GRUB installer uses an unexpected initrd: " + name)
+                checked_initrd += 1
+    if not checked_kernel or checked_kernel != checked_initrd:
+        raise ValueError("GRUB installer needs matching kernel and initrd entries")
+    if sourced:
+        start = configs["install_start.cfg"]
+        if not re.search(r"(?m)^\s*linux(?:efi)?\s+/install/vmlinuz(?:\s|$)", start):
+            raise ValueError("GRUB start menu lacks installer kernel")
+        if not re.search(r"(?m)^\s*initrd(?:efi)?\s+/install/initrd\.gz\s*$", start):
+            raise ValueError("GRUB start menu lacks installer initrd")
+    print("PASS: shipped GRUB installer menu uses the guarded kernel/initrd")
+
+
 def checked_file(path):
     """Reject block devices and QEMU option separators in user-supplied paths."""
     path = Path(path).resolve(strict=True)
@@ -172,7 +248,7 @@ def initrd_members(source):
     """
     try:
         raw = gzip.decompress(Path(source).read_bytes())
-    except (OSError, EOFError) as error:
+    except (OSError, EOFError, zlib.error) as error:
         raise ValueError("invalid gzip installer initrd") from error
     members = {}
     offset = 0
@@ -200,7 +276,7 @@ def initrd_members(source):
         if content_end > len(raw):
             raise ValueError("truncated newc member content")
         content = raw[content_start:content_end]
-        if magic == b"070702" and sum(content) & 0xffffffff != fields[12]:
+        if magic == b"070702" and (sum(content) & 0xffffffff) != fields[12]:
             raise ValueError("invalid newc member checksum")
         offset = (content_end + 3) & ~3
         if name == "TRAILER!!!":
@@ -225,16 +301,19 @@ def validate_production_initrd(source):
         if name.endswith(".sh") and not mode & 0o111:
             raise ValueError("production installer hook is not executable: " + name)
     try:
-        settings = {line.strip() for line in members["preseed.cfg"][1].decode().splitlines()
-                    if line.strip() and not line.lstrip().startswith("#")}
+        settings = [line.strip() for line in members["preseed.cfg"][1].decode().splitlines()
+                    if line.strip() and not line.lstrip().startswith("#")]
     except UnicodeDecodeError as error:
         raise ValueError("production preseed is not UTF-8") from error
     for required in (
             "d-i preseed/early_command string /usr/lib/locasos/guard-vm.sh",
             "d-i preseed/late_command string /usr/lib/locasos/finish-install.sh"):
-        if required not in settings:
-            raise ValueError("production installer safety command missing: " + required)
-    if any("partman" in line or "passwd/user-password" in line for line in settings):
+        matching = [line for line in settings if line.split()[:2] == required.split()[:2]]
+        if matching != [required]:
+            raise ValueError("production installer safety command missing or overridden: " + required)
+    if any("partman" in line or "passwd/user-password" in line
+           or any(key in line for key in ("preseed/include", "preseed/run"))
+           for line in settings):
         raise ValueError("production preseed must not automate disk partitioning or credentials")
     print("PASS: shipped installer initrd has interactive VM guard and finish hooks")
 
@@ -343,7 +422,9 @@ def main(argv=None):
         kernel, initrd = tmp / "vmlinuz", tmp / "original-initrd.gz"
         subprocess.run(["xorriso", "-osirrox", "on", "-indev", str(iso),
                         "-extract", "/install/vmlinuz", str(kernel),
-                        "-extract", "/install/initrd.gz", str(initrd)], check=True)
+                        "-extract", "/install/initrd.gz", str(initrd),
+                        "-extract", "/boot/grub", str(tmp / "grub")], check=True)
+        validate_boot_menu(tmp / "grub")
         test_initrd = tmp / "ci-initrd.gz"
         prepare_initrd(initrd, test_initrd)
         disk, nvram, monitor = tmp / "scratch.qcow2", tmp / "vars.fd", tmp / "monitor.sock"

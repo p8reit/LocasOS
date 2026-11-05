@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 from unittest import mock
 import json
+import io
 import unittest
 
 spec = importlib.util.spec_from_file_location(
@@ -11,6 +12,20 @@ spec.loader.exec_module(m)
 
 
 class GuestReadinessTests(unittest.TestCase):
+    def test_missing_uart_uses_journal_output_without_closing_stdout(self):
+        output = io.StringIO()
+        with mock.patch.object(m.os, "open", side_effect=OSError()), mock.patch.object(m.sys, "stdout", output):
+            with m.diagnostics_stream(Path("/dev/ttyS0")) as stream:
+                stream.write("health\n")
+        self.assertFalse(output.closed)
+        self.assertEqual(output.getvalue(), "health\n")
+
+    def test_uart_is_opened_without_waiting_for_carrier(self):
+        with mock.patch.object(m.os, "open", side_effect=OSError()) as opened:
+            with m.diagnostics_stream(Path("/dev/ttyS0")):
+                pass
+        self.assertEqual(opened.call_args.args[1], m.os.O_WRONLY | m.os.O_NONBLOCK | m.os.O_NOCTTY)
+
     def test_exact_health_json(self):
         self.assertTrue(m.healthy_payload(b'{"component":"locas-core","status":"ok"}'))
         for raw in (b'', b'{"status":"ok"}',

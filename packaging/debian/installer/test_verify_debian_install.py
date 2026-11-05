@@ -106,6 +106,13 @@ class InitrdContainment(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "safety command missing"):
             self.validate_fixture(self.production_archive(settings="d-i live-installer/enable boolean true\n"))
 
+    def test_later_preseed_command_cannot_override_required_guard(self):
+        settings = ("d-i preseed/early_command string /usr/lib/locasos/guard-vm.sh\n"
+                    "d-i preseed/early_command string true\n"
+                    "d-i preseed/late_command string /usr/lib/locasos/finish-install.sh\n")
+        with self.assertRaisesRegex(ValueError, "overridden"):
+            self.validate_fixture(self.production_archive(settings=settings))
+
     def test_shipped_preseed_cannot_automate_partitioning(self):
         settings = ("d-i preseed/early_command string /usr/lib/locasos/guard-vm.sh\n"
                     "d-i preseed/late_command string /usr/lib/locasos/finish-install.sh\n"
@@ -139,12 +146,66 @@ class InitrdContainment(unittest.TestCase):
         self.assertIn("d-i partman/early_command string /usr/lib/locasos/ci-guard.sh", m.PRESEED)
         for required in ("qemu_fw_cfg", "locasos-scratch", m.TOKEN,
                          "expected exactly one scratch disk", "disk contains partitions",
-                         "mounted disk", "blkid unavailable", "poweroff -f"):
+                         "mounted disk", "blkid unavailable", "poweroff -f", "udevadm settle",
+                         "udevadm info --query=property", "ID_SERIAL_SHORT=locasos-scratch",
+                         "ID_VENDOR=QEMU", "ID_MODEL=QEMU_HARDDISK"):
             self.assertIn(required, m.CI_GUARD)
+        self.assertNotIn("/device/serial", m.CI_GUARD)
+        self.assertLess(m.CI_GUARD.index("udevadm settle"), m.CI_GUARD.index("list-devices disk"))
         self.assertNotIn("partman-auto/disk string /dev/", m.PRESEED)
         self.assertLess(m.CI_GUARD.index("qemu_fw_cfg"), m.CI_GUARD.index("db_set partman-auto/disk"))
         self.assertIn("passwd/user-password-crypted password !", m.PRESEED)
         self.assertIn("/target/etc/locasos-installed-vm-test", m.CI_FINISH)
+
+
+
+class BootMenuWiring(unittest.TestCase):
+    ENTRY = "menuentry 'Install LocasOS' {\n linux /install/vmlinuz vga=normal --- quiet\n initrd /install/initrd.gz\n}\n"
+
+    def check(self, root="source /boot/grub/install_start.cfg\n", installer=None, extras=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            (path / "grub.cfg").write_text(root)
+            if installer is not None:
+                (path / "install_start.cfg").write_text(installer)
+            for name, body in (extras or {}).items():
+                (path / name).write_text(body)
+            m.validate_boot_menu(path)
+
+    def test_live_build_installer_include_is_wired(self):
+        self.check(installer=self.ENTRY)
+
+    def test_inline_installer_is_wired(self):
+        self.check(root=self.ENTRY)
+
+    def test_missing_installer_menu_or_include_refused(self):
+        for root in ("# source /boot/grub/install_start.cfg\n", "source /boot/grub/install_start.cfg\n"):
+            with self.subTest(root=root):
+                with self.assertRaisesRegex(ValueError, "no wired|include missing"):
+                    self.check(root=root)
+
+    def test_disabled_installer_include_refused(self):
+        with self.assertRaisesRegex(ValueError, "disabled"):
+            self.check(root="if false; then\nsource /boot/grub/install_start.cfg\nfi\n", installer=self.ENTRY)
+
+    def test_all_installer_entries_use_guarded_kernel_and_initrd(self):
+        for bad in (self.ENTRY.replace("/install/vmlinuz", "/other/vmlinuz"),
+                    self.ENTRY.replace("/install/initrd.gz", "/other/initrd.gz")):
+            with self.subTest(entry=bad):
+                with self.assertRaisesRegex(ValueError, "unexpected"):
+                    self.check(installer=self.ENTRY, extras={"install.cfg": bad})
+
+    def test_external_preseed_or_command_override_refused(self):
+        for override in ("url=https://example.invalid/test.cfg", "preseed/url=https://example.invalid/test.cfg",
+                         "preseed/early_command=true", "file=/other/preseed.cfg"):
+            with self.subTest(override=override):
+                bad = self.ENTRY.replace("vga=normal", "vga=normal " + override)
+                with self.assertRaisesRegex(ValueError, "overrides"):
+                    self.check(installer=bad)
+
+    def test_installer_missing_initrd_refused(self):
+        with self.assertRaisesRegex(ValueError, "matching|lacks"):
+            self.check(installer=self.ENTRY.replace(" initrd /install/initrd.gz\n", ""))
 
 
 class FreshEvidence(unittest.TestCase):

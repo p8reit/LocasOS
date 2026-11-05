@@ -29,6 +29,3 @@ printf 'locasos-vm-install-v1\n' > /target/var/lib/locas/.locasos-vm-install-sen
 in-target update-initramfs -u -k all
 sync
 printf 'LOCASOS_VM_INSTALL_COMPLETE\n'
-if [ -c /dev/ttyS0 ]; then
-    printf 'LOCASOS_VM_INSTALL_COMPLETE\n' > /dev/ttyS0 || true
-fi
