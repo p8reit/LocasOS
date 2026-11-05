@@ -45,7 +45,7 @@ jobs:
           set -Eeuo pipefail
           # This privileged container runs ONLY on a disposable GitHub-hosted VM.
           # Never run this command on physical LocasOS production hardware.
-          docker run --rm --privileged \
+          docker run --name locasos-iso-builder --privileged \
             -v "$PWD:/src" -w /src \
             -e LOCAS_UPDATE_PUBLIC_KEY_B64 \
             debian:trixie bash -lc '
@@ -55,28 +55,35 @@ jobs:
               apt-get install -y --no-install-recommends \
                 ca-certificates python3 golang-go live-build debootstrap xorriso \
                 squashfs-tools grub-efi-amd64-bin syslinux-common \
-                qemu-system-x86 ovmf
+                qemu-system-x86 qemu-utils ovmf
               bash -n packaging/debian/build-live-iso.sh
               bash packaging/debian/build-live-iso.sh
             '
+          # Preserve tools only on this disposable runner. Verification runs
+          # without privileges, host devices or network in a fresh container.
+          docker commit locasos-iso-builder locasos-iso-tools:ci
+          docker rm locasos-iso-builder
           sudo chown -R "$USER:$USER" dist build
-      - name: Install VM verification tools on runner
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xorriso qemu-system-x86 qemu-utils ovmf
       - name: Verify ISO identity and EFI metadata
         run: |
+          docker run --rm --network none -v "$PWD:/src" -w /src locasos-iso-tools:ci bash -lc '
+          set -Eeuo pipefail
           cd dist/debian
           sha256sum -c locasos-native-developer-amd64.iso.sha256
           xorriso -indev locasos-native-developer-amd64.iso -report_el_torito plain | tee boot-report.txt
-          grep -Eiq 'EFI|platform id 0xef|UEFI' boot-report.txt
+          grep -Eiq "EFI|platform id 0xef|UEFI" boot-report.txt
+          '
       - name: UEFI QEMU live-boot smoke (diskless)
         shell: bash
         run: |
+          set -Eeuo pipefail
+          docker run --rm --network none -v "$PWD:/src" -w /src locasos-iso-tools:ci bash -lc '
           set -Eeuo pipefail
           firmware=
           for option in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd; do
             if [[ -f "$option" ]]; then firmware="$option"; break; fi
           done
-          [[ -n "$firmware" ]] || { echo 'Missing OVMF firmware' >&2; exit 1; }
+          [[ -n "$firmware" ]] || { echo "Missing OVMF firmware" >&2; exit 1; }
           set +e
           timeout 35 qemu-system-x86_64 \
             -machine q35,accel=tcg -m 2048 -smp 2 \
@@ -86,17 +93,22 @@ jobs:
           result=$?
           set -e
           [[ "$result" -eq 124 ]] || { echo "UEFI VM exited unexpectedly ($result)" >&2; exit 1; }
-          echo 'PASS: diskless UEFI VM smoke process alive (guest health still requires separate testing)'
+          echo "PASS: diskless UEFI VM smoke process alive (guest health still requires separate testing)"
+          '
       - name: Install to disposable disk and verify two disk-only boots
         shell: bash
         run: |
           set -Eeuo pipefail
+          docker run --rm --network none -v "$PWD:/src" -w /src locasos-iso-tools:ci bash -lc '
+          set -Eeuo pipefail
+          read -r image_digest image_filename < dist/debian/locasos-native-developer-amd64.iso.sha256
           python3 packaging/debian/installer/verify_debian_install.py \
             --iso dist/debian/locasos-native-developer-amd64.iso \
-            --sha256 "$(cut -d ' ' -f 1 dist/debian/locasos-native-developer-amd64.iso.sha256)" \
+            --sha256 "$image_digest" \
             --ovmf-code /usr/share/OVMF/OVMF_CODE_4M.fd \
             --ovmf-vars /usr/share/OVMF/OVMF_VARS_4M.fd \
             --log-dir dist/debian/install-evidence
+          '
       - name: Preserve installation diagnostics
         if: always()
         uses: actions/upload-artifact@v4
