@@ -107,6 +107,16 @@ class FirmwareOptIn(unittest.TestCase):
 
 
 class InitrdContainment(unittest.TestCase):
+    def test_unexpected_preflight_error_refuses_instead_of_returning(self):
+        preamble = m.render_ci_guard().split("/usr/lib/locasos/guard-vm.sh", 1)[0]
+        # Replace shutdown only; exercise the real shell error trap without
+        # running any device inventory or power command on the test host.
+        result = subprocess.run(["sh", "-c", preamble +
+            '\nrefuse() { trap - 0; exit 77; }\nfalse\necho unsafe-return\n'],
+            capture_output=True, text=True, timeout=3)
+        self.assertEqual(result.returncode, 77)
+        self.assertNotIn("unsafe-return", result.stdout)
+
     def production_archive(self, omitted=(), settings=None, mode=0o100755):
         files = [("preseed.cfg", (settings or (
             "d-i preseed/early_command string /usr/lib/locasos/guard-vm.sh\n"

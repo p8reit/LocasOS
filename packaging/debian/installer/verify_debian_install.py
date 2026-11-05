@@ -51,11 +51,14 @@ TOOLS = ("xorriso", "qemu-img", "qemu-system-x86_64")
 CI_GUARD = r'''#!/bin/sh
 set -eu
 refuse() {
-    echo "LOCASOS_VM_INSTALL_REFUSED: $*" >/dev/ttyS0
+    trap - 0
+    trap '' HUP INT TERM
+    echo "LOCASOS_VM_INSTALL_REFUSED: $*" >/dev/ttyS0 || true
     poweroff -f || true
     # Never return into a preseed containing partitioning confirmations.
-    while :; do sleep 60; done
+    while :; do sleep 60 || true; done
 }
+trap 'refuse "unexpected preflight error"' 0
 /usr/lib/locasos/guard-vm.sh || refuse "production VM guard"
 __LOCASOS_FIRMWARE_UUID_GUARD__
 udevadm settle || refuse "udev discovery did not settle"
@@ -90,6 +93,7 @@ while read -r source rest; do
 done </proc/mounts
 . /usr/share/debconf/confmodule
 db_set partman-auto/disk "$disk"
+trap - 0
 '''
 
 
@@ -370,7 +374,7 @@ def vm_command(code, variables, disk, monitor, iso=None, kernel=None, initrd=Non
             raise ValueError("installer kernel and temporary initrd required")
         cmd += ["-drive", "if=none,id=cd,format=raw,readonly=on,media=cdrom,file=" + str(iso),
                 "-device", "scsi-cd,drive=cd", "-kernel", str(kernel), "-initrd", str(initrd),
-                "-append", "console=ttyS0,115200n8 auto=true priority=critical preseed/file=/preseed.cfg",
+                "-append", "console=ttyS0,115200n8 auto=true priority=critical DEBIAN_FRONTEND=text preseed/file=/preseed.cfg",
                 "-uuid", canonical_firmware_uuid(firmware_uuid)]
     elif kernel is not None or initrd is not None:
         raise ValueError("disk-only boots must not supply kernel or initrd")

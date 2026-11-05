@@ -29,7 +29,7 @@ this phase does not establish a new Secure Boot trust chain.
 
 ## Install
 
-1. Boot the new ISO and select **Install** in its boot menu. The live entry still
+1. Boot the new ISO and select **Start installer** in its boot menu. The live entry still
    starts an ephemeral session and does not install anything.
 2. Follow Debian's language, keyboard, hostname and networking prompts.
 3. Create your own administrator account and password. There is no installed
