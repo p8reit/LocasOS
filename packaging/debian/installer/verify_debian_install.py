@@ -160,7 +160,7 @@ GRUB
 in-target update-grub
 sync
 # The host also waits for installer poweroff before starting disk-only boots.
-printf 'LOCASOS_VM_INSTALL_COMPLETE\n' >/dev/ttyS0
+printf '\nLOCASOS_VM_INSTALL_COMPLETE\n' >/dev/ttyS0
 '''
 
 

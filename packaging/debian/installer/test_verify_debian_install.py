@@ -274,6 +274,15 @@ class BootMenuWiring(unittest.TestCase):
 
 
 class FreshEvidence(unittest.TestCase):
+    def test_completion_marker_survives_installer_progress_on_same_console(self):
+        emission = m.CI_FINISH.strip().splitlines()[-1]
+        self.assertTrue(emission.startswith("printf "))
+        self.assertTrue(emission.endswith(">/dev/ttyS0"))
+        raw = subprocess.check_output(["sh", "-c", emission.rsplit(">", 1)[0]])
+        evidence = m.StageEvidence("install")
+        evidence.feed(b"Finishing installation ... 10%" + raw)
+        self.assertTrue(evidence.accepted)
+
     def run_process(self, body, stage="install"):
         with tempfile.TemporaryDirectory() as root:
             log = Path(root) / "serial.log"

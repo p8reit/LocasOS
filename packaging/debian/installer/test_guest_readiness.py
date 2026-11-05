@@ -12,6 +12,12 @@ spec.loader.exec_module(m)
 
 
 class GuestReadinessTests(unittest.TestCase):
+    def test_health_marker_starts_its_own_serial_line(self):
+        output = io.StringIO("debian login: ")
+        output.seek(0, 2)
+        m.write_marker(output, m.MARKER)
+        self.assertEqual(output.getvalue().splitlines()[-1], m.MARKER)
+
     def test_missing_uart_uses_journal_output_without_closing_stdout(self):
         output = io.StringIO()
         with mock.patch.object(m.os, "open", side_effect=OSError()), mock.patch.object(m.sys, "stdout", output):

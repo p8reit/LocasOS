@@ -16,6 +16,12 @@ MARKER = "LOCASOS_GUEST_HEALTH_OK"
 FAIL_MARKER = "LOCASOS_GUEST_HEALTH_FAILED"
 
 
+def write_marker(stream, marker):
+    # Getty and installer progress can leave the serial console mid-line.
+    # Keep exact-line evidence unambiguous without accepting prefixed echoes.
+    stream.write("\n" + marker + "\n")
+
+
 @contextlib.contextmanager
 def diagnostics_stream(path):
     """Hyper-V need not have a UART; never block boot opening a serial port."""
@@ -106,7 +112,7 @@ def main():
         deadline = time.monotonic() + args.timeout
         while time.monotonic() < deadline:
             if systemd_ready() and api_ready():
-                serial.write(MARKER + "\n")
+                write_marker(serial, MARKER)
                 if (pathlib.Path("/etc/locasos-installed-vm-test").is_file()
                         or pathlib.Path("/etc/locasos-installed-vm").is_file()):
                     sentinel = pathlib.Path("/var/lib/locas/.locasos-vm-install-sentinel")
@@ -115,13 +121,13 @@ def main():
                     except OSError:
                         persisted = False
                     if persisted:
-                        serial.write("LOCASOS_INSTALLED_BOOT_OK\n")
+                        write_marker(serial, "LOCASOS_INSTALLED_BOOT_OK")
                     else:
-                        serial.write("LOCASOS_INSTALLED_DATA_FAILED\n")
+                        write_marker(serial, "LOCASOS_INSTALLED_DATA_FAILED")
                         return 1
                 return 0
             time.sleep(2)
-        serial.write(FAIL_MARKER + "\n")
+        write_marker(serial, FAIL_MARKER)
         diag(serial)
     return 1
 
