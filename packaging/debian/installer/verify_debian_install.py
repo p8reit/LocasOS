@@ -2,7 +2,7 @@
 """Install the exact developer ISO into a new disposable QEMU disk, then boot twice.
 
 The production ISO is never modified. Unattended partitioning is present ONLY
-in a temporary installer initrd guarded by QEMU fw_cfg and synthetic disk ID.
+in a temporary installer initrd guarded by a per-run SMBIOS UUID and synthetic disk ID.
 No option accepts a target disk, host block device, shared directory, or network.
 """
 import argparse
@@ -19,11 +19,34 @@ import sys
 import tempfile
 import time
 import zlib
+import uuid
 
 from disposable_vm import checksum
 from guest_serial import StageEvidence
 
-TOKEN = "LOCASOS_DISPOSABLE_VM_INSTALL_V1"
+DEFAULT_FIRMWARE_UUID = "89d183da-0283-468e-9dbf-965ebf5e66ed"
+
+
+def canonical_firmware_uuid(value):
+    """Only canonical UUID text may enter QEMU arguments or a shell script."""
+    if not isinstance(value, str):
+        raise ValueError("expected canonical firmware UUID")
+    try:
+        normalized = str(uuid.UUID(value))
+    except (ValueError, AttributeError) as error:
+        raise ValueError("expected canonical firmware UUID") from error
+    if value != normalized:
+        raise ValueError("expected canonical firmware UUID")
+    return normalized
+
+
+def firmware_uuid_guard(firmware_uuid):
+    expected = canonical_firmware_uuid(firmware_uuid)
+    return ("marker=/sys/class/dmi/id/product_uuid\n"
+            '[ -r "$marker" ] || refuse "SMBIOS install UUID missing"\n'
+            'firmware_uuid=$(tr \'[:upper:]\' \'[:lower:]\' <"$marker")\n'
+            '[ "$firmware_uuid" = \'' + expected + '\' ] || refuse "wrong SMBIOS install UUID"')
+
 TOOLS = ("xorriso", "qemu-img", "qemu-system-x86_64")
 CI_GUARD = r'''#!/bin/sh
 set -eu
@@ -34,10 +57,7 @@ refuse() {
     while :; do sleep 60; done
 }
 /usr/lib/locasos/guard-vm.sh || refuse "production VM guard"
-modprobe qemu_fw_cfg || refuse "qemu_fw_cfg unavailable"
-marker=/sys/firmware/qemu_fw_cfg/by_name/opt/locasos/dev-install/raw
-[ -r "$marker" ] || refuse "QEMU opt-in marker missing"
-[ "$(cat "$marker")" = LOCASOS_DISPOSABLE_VM_INSTALL_V1 ] || refuse "wrong QEMU opt-in marker"
+__LOCASOS_FIRMWARE_UUID_GUARD__
 udevadm settle || refuse "udev discovery did not settle"
 set -- $(list-devices disk)
 [ "$#" -eq 1 ] || refuse "expected exactly one scratch disk"
@@ -71,6 +91,11 @@ done </proc/mounts
 . /usr/share/debconf/confmodule
 db_set partman-auto/disk "$disk"
 '''
+
+
+def render_ci_guard(firmware_uuid=DEFAULT_FIRMWARE_UUID):
+    return CI_GUARD.replace("__LOCASOS_FIRMWARE_UUID_GUARD__", firmware_uuid_guard(firmware_uuid))
+
 
 # No reusable login credential: the test user and root are locked. This disk is
 # destroyed when the temporary directory exits; production prompts for an admin.
@@ -318,10 +343,10 @@ def validate_production_initrd(source):
     print("PASS: shipped installer initrd has interactive VM guard and finish hooks")
 
 
-def prepare_initrd(source, destination):
+def prepare_initrd(source, destination, firmware_uuid=DEFAULT_FIRMWARE_UUID):
     validate_production_initrd(source)
     files = [("preseed.cfg", PRESEED.encode(), 0o100644),
-             ("usr/lib/locasos/ci-guard.sh", CI_GUARD.encode(), 0o100755),
+             ("usr/lib/locasos/ci-guard.sh", render_ci_guard(firmware_uuid).encode(), 0o100755),
              ("usr/lib/locasos/ci-finish.sh", CI_FINISH.encode(), 0o100755)]
     with Path(destination).open("wb") as out:
         with Path(source).open("rb") as original:
@@ -329,7 +354,8 @@ def prepare_initrd(source, destination):
         out.write(gzip.compress(newc_archive(files), mtime=0))
 
 
-def vm_command(code, variables, disk, monitor, iso=None, kernel=None, initrd=None):
+def vm_command(code, variables, disk, monitor, iso=None, kernel=None, initrd=None,
+               firmware_uuid=DEFAULT_FIRMWARE_UUID):
     cmd = ["qemu-system-x86_64", "-nodefaults", "-machine", "q35,accel=tcg",
            "-m", "4096", "-smp", "2", "-display", "none", "-serial", "stdio",
            "-monitor", "unix:" + str(monitor) + ",server=on,wait=off",
@@ -345,7 +371,7 @@ def vm_command(code, variables, disk, monitor, iso=None, kernel=None, initrd=Non
         cmd += ["-drive", "if=none,id=cd,format=raw,readonly=on,media=cdrom,file=" + str(iso),
                 "-device", "scsi-cd,drive=cd", "-kernel", str(kernel), "-initrd", str(initrd),
                 "-append", "console=ttyS0,115200n8 auto=true priority=critical preseed/file=/preseed.cfg",
-                "-fw_cfg", "name=opt/locasos/dev-install,string=" + TOKEN]
+                "-uuid", canonical_firmware_uuid(firmware_uuid)]
     elif kernel is not None or initrd is not None:
         raise ValueError("disk-only boots must not supply kernel or initrd")
     else:
@@ -426,14 +452,15 @@ def main(argv=None):
                         "-extract", "/boot/grub", str(tmp / "grub")], check=True)
         validate_boot_menu(tmp / "grub")
         test_initrd = tmp / "ci-initrd.gz"
-        prepare_initrd(initrd, test_initrd)
+        firmware_uuid = str(uuid.uuid4())
+        prepare_initrd(initrd, test_initrd, firmware_uuid=firmware_uuid)
         disk, nvram, monitor = tmp / "scratch.qcow2", tmp / "vars.fd", tmp / "monitor.sock"
         shutil.copyfile(variables, nvram)
         subprocess.run(["qemu-img", "create", "-f", "qcow2", str(disk), "64G"], check=True)
-        run_stage(vm_command(code, nvram, disk, monitor, iso, kernel, test_initrd),
+        run_stage(vm_command(code, nvram, disk, monitor, iso, kernel, test_initrd, firmware_uuid=firmware_uuid),
                   "install", args.install_timeout, monitor, args.log_dir / "install.serial.log")
         # Reuse only this newly-created disk and its guest NVRAM. Neither boot
-        # has the ISO, injected initrd, kernel, fw_cfg install token, or network.
+        # has the ISO, injected initrd, kernel, SMBIOS install UUID, or network.
         for number in (1, 2):
             monitor.unlink(missing_ok=True)
             run_stage(vm_command(code, nvram, disk, monitor), "installed", args.boot_timeout,

@@ -3,6 +3,7 @@ import gzip
 import importlib.util
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -22,14 +23,15 @@ class VMCommands(unittest.TestCase):
         args = self.command(iso=Path("/tmp/image.iso"), kernel=Path("/tmp/vmlinuz"),
                             initrd=Path("/tmp/ci-initrd.gz"))
         self.assertIn("scsi-hd,drive=scratch,serial=locasos-scratch", args)
-        self.assertIn("name=opt/locasos/dev-install,string=" + m.TOKEN, args)
+        self.assertEqual(args[args.index("-uuid") + 1], m.DEFAULT_FIRMWARE_UUID)
+        self.assertNotIn("-fw_cfg", args)
         self.assertIn("if=none,id=cd,format=raw,readonly=on,media=cdrom,file=/tmp/image.iso", args)
         self.assertEqual(args[args.index("-net") + 1], "none")
         self.assertFalse(any("file=/dev/" in arg or "vfio" in arg or "virtfs" in arg for arg in args))
 
     def test_disk_boot_has_no_install_media_or_external_kernel(self):
         args = self.command()
-        for forbidden in ("-kernel", "-initrd", "-append", "-fw_cfg"):
+        for forbidden in ("-kernel", "-initrd", "-append", "-fw_cfg", "-uuid"):
             self.assertNotIn(forbidden, args)
         self.assertFalse(any("image.iso" in arg or "media=cdrom" in arg for arg in args))
         self.assertIn("order=c", args)
@@ -64,6 +66,46 @@ class VMCommands(unittest.TestCase):
                 m.checked_file(root)
 
 
+class FirmwareOptIn(unittest.TestCase):
+    def test_per_run_uuid_bound_to_guest_guard_and_qemu(self):
+        expected = "3d46da63-7207-431e-aea4-4d25bc739c83"
+        guard = m.render_ci_guard(expected)
+        self.assertIn(expected, guard)
+        self.assertNotIn(m.DEFAULT_FIRMWARE_UUID, guard)
+        args = m.vm_command(Path("/tmp/code.fd"), Path("/tmp/vars.fd"), Path("/tmp/scratch.qcow2"),
+                            Path("/tmp/monitor.sock"), Path("/tmp/image.iso"),
+                            Path("/tmp/vmlinuz"), Path("/tmp/ci-initrd.gz"), firmware_uuid=expected)
+        self.assertEqual(args[args.index("-uuid") + 1], expected)
+
+    def test_invalid_or_noncanonical_uuid_never_reaches_shell(self):
+        for invalid in ("", "not-a-uuid", "89d183da0283468e9dbf965ebf5e66ed",
+                        m.DEFAULT_FIRMWARE_UUID.upper(), "'; poweroff; #", None):
+            with self.subTest(value=invalid):
+                with self.assertRaisesRegex(ValueError, "canonical firmware UUID"):
+                    m.render_ci_guard(invalid)
+
+    def run_uuid_guard(self, actual):
+        with tempfile.TemporaryDirectory() as root:
+            marker = Path(root) / "product_uuid"
+            if actual is not None:
+                marker.write_text(actual + "\n")
+            snippet = m.firmware_uuid_guard(m.DEFAULT_FIRMWARE_UUID).replace(
+                "/sys/class/dmi/id/product_uuid", str(marker))
+            return subprocess.run(["sh", "-c", 'refuse() { echo "$*"; exit 7; };\n' + snippet],
+                                  capture_output=True, text=True)
+
+    def test_guest_matching_uuid_accepts_firmware_case(self):
+        self.assertEqual(self.run_uuid_guard(m.DEFAULT_FIRMWARE_UUID).returncode, 0)
+        self.assertEqual(self.run_uuid_guard(m.DEFAULT_FIRMWARE_UUID.upper()).returncode, 0)
+
+    def test_guest_wrong_or_missing_uuid_refuses(self):
+        for actual in (None, "3d46da63-7207-431e-aea4-4d25bc739c83", "garbage"):
+            with self.subTest(actual=actual):
+                result = self.run_uuid_guard(actual)
+                self.assertEqual(result.returncode, 7)
+                self.assertIn("SMBIOS install UUID", result.stdout)
+
+
 class InitrdContainment(unittest.TestCase):
     def production_archive(self, omitted=(), settings=None, mode=0o100755):
         files = [("preseed.cfg", (settings or (
@@ -90,7 +132,18 @@ class InitrdContainment(unittest.TestCase):
             unpacked = gzip.decompress(dest.read_bytes())
             self.assertIn(b"070701", unpacked)
             self.assertIn(b"preseed.cfg\0", unpacked)
-            self.assertIn(m.CI_GUARD.encode(), unpacked)
+            self.assertIn(m.render_ci_guard().encode(), unpacked)
+
+    def test_temporary_initrd_embeds_the_same_per_run_uuid(self):
+        expected = "3d46da63-7207-431e-aea4-4d25bc739c83"
+        with tempfile.TemporaryDirectory() as root:
+            source, dest = Path(root) / "original.gz", Path(root) / "ci.gz"
+            source.write_bytes(gzip.compress(self.production_archive(), mtime=0))
+            m.prepare_initrd(source, dest, firmware_uuid=expected)
+            guard = m.initrd_members(dest)["usr/lib/locasos/ci-guard.sh"][1].decode()
+            self.assertIn(expected, guard)
+            self.assertNotIn(m.DEFAULT_FIRMWARE_UUID, guard)
+            self.assertNotIn("__LOCASOS_FIRMWARE_UUID_GUARD__", guard)
 
     def test_shipped_initrd_missing_guard_or_finish_refused(self):
         for name in ("preseed.cfg", "usr/lib/locasos/guard-vm.sh", "usr/lib/locasos/finish-install.sh"):
@@ -144,16 +197,18 @@ class InitrdContainment(unittest.TestCase):
     def test_unattended_settings_are_guarded_and_test_only(self):
         self.assertIn("d-i preseed/early_command string /usr/lib/locasos/guard-vm.sh", m.PRESEED)
         self.assertIn("d-i partman/early_command string /usr/lib/locasos/ci-guard.sh", m.PRESEED)
-        for required in ("qemu_fw_cfg", "locasos-scratch", m.TOKEN,
+        guard = m.render_ci_guard()
+        for required in ("/sys/class/dmi/id/product_uuid", "locasos-scratch", m.DEFAULT_FIRMWARE_UUID,
                          "expected exactly one scratch disk", "disk contains partitions",
                          "mounted disk", "blkid unavailable", "poweroff -f", "udevadm settle",
                          "udevadm info --query=property", "ID_SERIAL_SHORT=locasos-scratch",
                          "ID_VENDOR=QEMU", "ID_MODEL=QEMU_HARDDISK"):
-            self.assertIn(required, m.CI_GUARD)
-        self.assertNotIn("/device/serial", m.CI_GUARD)
-        self.assertLess(m.CI_GUARD.index("udevadm settle"), m.CI_GUARD.index("list-devices disk"))
+            self.assertIn(required, guard)
+        self.assertNotIn("/device/serial", guard)
+        self.assertNotIn("qemu_fw_cfg", guard)
+        self.assertLess(guard.index("udevadm settle"), guard.index("list-devices disk"))
         self.assertNotIn("partman-auto/disk string /dev/", m.PRESEED)
-        self.assertLess(m.CI_GUARD.index("qemu_fw_cfg"), m.CI_GUARD.index("db_set partman-auto/disk"))
+        self.assertLess(guard.index("/sys/class/dmi/id/product_uuid"), guard.index("db_set partman-auto/disk"))
         self.assertIn("passwd/user-password-crypted password !", m.PRESEED)
         self.assertIn("/target/etc/locasos-installed-vm-test", m.CI_FINISH)
 
