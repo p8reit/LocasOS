@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Developer-only guest boot readiness and bounded failure diagnostics."""
 import argparse
+import contextlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -12,6 +14,24 @@ HEALTH_URL = "http://127.0.0.1:59420/healthz"
 SERVICES = ("locas-agent.service", "locas-core.service")
 MARKER = "LOCASOS_GUEST_HEALTH_OK"
 FAIL_MARKER = "LOCASOS_GUEST_HEALTH_FAILED"
+
+
+def write_marker(stream, marker):
+    # Getty and installer progress can leave the serial console mid-line.
+    # Keep exact-line evidence unambiguous without accepting prefixed echoes.
+    stream.write("\n" + marker + "\n")
+
+
+@contextlib.contextmanager
+def diagnostics_stream(path):
+    """Hyper-V need not have a UART; never block boot opening a serial port."""
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK | os.O_NOCTTY)
+    except OSError:
+        yield sys.stdout
+        return
+    with os.fdopen(fd, "w", buffering=1) as stream:
+        yield stream
 
 
 def healthy_payload(raw):
@@ -26,7 +46,7 @@ def healthy_payload(raw):
 
 def systemd_ready():
     try:
-        for unit in ("multi-user.target", *SERVICES):
+        for unit in ("multi-user.target", "dbus.service", *SERVICES):
             state = subprocess.run(
                 ["systemctl", "is-active", "--quiet", unit],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -88,25 +108,26 @@ def main():
             "/etc/locasos-release").read_text(encoding="utf-8"):
         print("wrong LocasOS edition", file=sys.stderr)
         return 2
-    with args.serial.open("w", buffering=1) as serial:
+    with diagnostics_stream(args.serial) as serial:
         deadline = time.monotonic() + args.timeout
         while time.monotonic() < deadline:
             if systemd_ready() and api_ready():
-                serial.write(MARKER + "\n")
-                if pathlib.Path("/etc/locasos-installed-vm-test").is_file():
+                write_marker(serial, MARKER)
+                if (pathlib.Path("/etc/locasos-installed-vm-test").is_file()
+                        or pathlib.Path("/etc/locasos-installed-vm").is_file()):
                     sentinel = pathlib.Path("/var/lib/locas/.locasos-vm-install-sentinel")
                     try:
                         persisted = sentinel.read_text(encoding="utf-8").strip() == "locasos-vm-install-v1"
                     except OSError:
                         persisted = False
                     if persisted:
-                        serial.write("LOCASOS_INSTALLED_BOOT_OK\n")
+                        write_marker(serial, "LOCASOS_INSTALLED_BOOT_OK")
                     else:
-                        serial.write("LOCASOS_INSTALLED_DATA_FAILED\n")
+                        write_marker(serial, "LOCASOS_INSTALLED_DATA_FAILED")
                         return 1
                 return 0
             time.sleep(2)
-        serial.write(FAIL_MARKER + "\n")
+        write_marker(serial, FAIL_MARKER)
         diag(serial)
     return 1
 
