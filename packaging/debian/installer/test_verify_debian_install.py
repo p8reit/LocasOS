@@ -65,10 +65,24 @@ class VMCommands(unittest.TestCase):
 
 
 class InitrdContainment(unittest.TestCase):
+    def production_archive(self, omitted=(), settings=None, mode=0o100755):
+        files = [("preseed.cfg", (settings or (
+            "d-i preseed/early_command string /usr/lib/locasos/guard-vm.sh\n"
+            "d-i preseed/late_command string /usr/lib/locasos/finish-install.sh\n")).encode(), 0o100644),
+            ("usr/lib/locasos/guard-vm.sh", b"#!/bin/sh\nexit 0\n", mode),
+            ("usr/lib/locasos/finish-install.sh", b"#!/bin/sh\nexit 0\n", mode)]
+        return m.newc_archive([entry for entry in files if entry[0] not in omitted])
+
+    def validate_fixture(self, archive):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "installer.gz"
+            path.write_bytes(gzip.compress(archive, mtime=0))
+            m.validate_production_initrd(path)
+
     def test_test_preseed_is_appended_only_to_copy(self):
         with tempfile.TemporaryDirectory() as root:
             source, dest = Path(root) / "original.gz", Path(root) / "ci.gz"
-            original = gzip.compress(b"original-initramfs", mtime=0)
+            original = gzip.compress(self.production_archive(), mtime=0)
             source.write_bytes(original)
             m.prepare_initrd(source, dest)
             self.assertEqual(source.read_bytes(), original)
@@ -78,6 +92,42 @@ class InitrdContainment(unittest.TestCase):
             self.assertIn(b"preseed.cfg\0", unpacked)
             self.assertIn(m.CI_GUARD.encode(), unpacked)
 
+    def test_shipped_initrd_missing_guard_or_finish_refused(self):
+        for name in ("preseed.cfg", "usr/lib/locasos/guard-vm.sh", "usr/lib/locasos/finish-install.sh"):
+            with self.subTest(member=name):
+                with self.assertRaisesRegex(ValueError, "missing"):
+                    self.validate_fixture(self.production_archive(omitted=(name,)))
+
+    def test_nonexecutable_shipped_hooks_refused(self):
+        with self.assertRaisesRegex(ValueError, "not executable"):
+            self.validate_fixture(self.production_archive(mode=0o100644))
+
+    def test_shipped_preseed_must_wire_both_commands(self):
+        with self.assertRaisesRegex(ValueError, "safety command missing"):
+            self.validate_fixture(self.production_archive(settings="d-i live-installer/enable boolean true\n"))
+
+    def test_shipped_preseed_cannot_automate_partitioning(self):
+        settings = ("d-i preseed/early_command string /usr/lib/locasos/guard-vm.sh\n"
+                    "d-i preseed/late_command string /usr/lib/locasos/finish-install.sh\n"
+                    "d-i partman/confirm boolean true\n")
+        with self.assertRaisesRegex(ValueError, "must not automate"):
+            self.validate_fixture(self.production_archive(settings=settings))
+
+    def test_truncated_newc_refused(self):
+        for raw in (b"070701", self.production_archive()[:150]):
+            with self.subTest(size=len(raw)):
+                with self.assertRaisesRegex(ValueError, "invalid|truncated"):
+                    self.validate_fixture(raw)
+
+    def test_concatenated_gzip_archives_use_final_member(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "installer.gz"
+            valid = gzip.compress(self.production_archive(), mtime=0)
+            override = m.newc_archive([("preseed.cfg", b"bad override", 0o100644)])
+            path.write_bytes(valid + gzip.compress(b"\0" * 512 + override, mtime=0))
+            with self.assertRaisesRegex(ValueError, "safety command missing"):
+                m.validate_production_initrd(path)
+
     def test_unsafe_initrd_path_rejected(self):
         for name in ("/etc/passwd", "../etc/passwd"):
             with self.subTest(name=name):
@@ -85,7 +135,8 @@ class InitrdContainment(unittest.TestCase):
                     m.newc_archive([(name, b"", 0o100644)])
 
     def test_unattended_settings_are_guarded_and_test_only(self):
-        self.assertIn("/usr/lib/locasos/ci-guard.sh", m.PRESEED)
+        self.assertIn("d-i preseed/early_command string /usr/lib/locasos/guard-vm.sh", m.PRESEED)
+        self.assertIn("d-i partman/early_command string /usr/lib/locasos/ci-guard.sh", m.PRESEED)
         for required in ("qemu_fw_cfg", "locasos-scratch", m.TOKEN,
                          "expected exactly one scratch disk", "disk contains partitions",
                          "mounted disk", "blkid unavailable", "poweroff -f"):

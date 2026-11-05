@@ -66,8 +66,7 @@ chmod 0755 "$workspace/config/hooks/live/"*.hook.chroot
 cd "$workspace"
 lb config --mode debian --distribution trixie --architectures amd64 \
   --binary-images iso-hybrid --linux-flavours amd64 --linux-packages linux-image \
-  --debian-installer live --debian-installer-gui false \
-  --debian-installer-preseedfile /preseed.cfg --archive-areas "main" \
+  --debian-installer live --debian-installer-gui false --archive-areas "main" \
   --iso-application "LocasOS Developer Live" --iso-publisher "LocasOS Community" \
   --iso-volume "LOCASOS_DEV" --apt-recommends false
 lb build

@@ -55,6 +55,9 @@ set +e
 signatures=$(blkid "$disk" 2>/dev/null)
 status=$?
 set -e
+echo "LOCASOS_CI_BLKID_STATUS $status" >/dev/ttyS0
+# Debian's util-linux blkid returns 2 for a successfully probed blank disk.
+# Do not accept an unknown implementation's status silently.
 [ "$status" -eq 2 ] && [ -z "$signatures" ] || refuse "existing filesystem or unreadable signature probe"
 while read -r source rest; do
     case "$source" in "$disk"|"$disk"[0-9]*|"$disk"p[0-9]*) refuse "mounted disk" ;; esac
@@ -65,7 +68,8 @@ db_set partman-auto/disk "$disk"
 
 # No reusable login credential: the test user and root are locked. This disk is
 # destroyed when the temporary directory exits; production prompts for an admin.
-PRESEED = r'''d-i preseed/early_command string /usr/lib/locasos/ci-guard.sh
+PRESEED = r'''d-i preseed/early_command string /usr/lib/locasos/guard-vm.sh
+d-i partman/early_command string /usr/lib/locasos/ci-guard.sh
 # Locale and network are deterministic and no package mirror is reachable.
 d-i debian-installer/locale string en_US.UTF-8
 d-i keyboard-configuration/xkb-keymap select us
@@ -159,7 +163,84 @@ def newc_archive(files):
     return bytes(data)
 
 
+def initrd_members(source):
+    """Read regular newc metadata without extracting untrusted initrd paths.
+
+    Debian installer initrds are gzip-compressed newc archives. Linux permits
+    concatenated compressed archives and zero padding; inspect the final member
+    at each path because that is what the kernel exposes after unpacking.
+    """
+    try:
+        raw = gzip.decompress(Path(source).read_bytes())
+    except (OSError, EOFError) as error:
+        raise ValueError("invalid gzip installer initrd") from error
+    members = {}
+    offset = 0
+    while offset < len(raw):
+        while offset < len(raw) and raw[offset] == 0:
+            offset += 1
+        if offset == len(raw):
+            break
+        if raw[offset:offset + 6] not in (b"070701", b"070702") or offset + 110 > len(raw):
+            raise ValueError("invalid newc installer initrd header")
+        magic = raw[offset:offset + 6]
+        try:
+            fields = [int(raw[offset + 6 + n * 8:offset + 14 + n * 8], 16)
+                      for n in range(13)]
+        except ValueError as error:
+            raise ValueError("invalid newc numeric metadata") from error
+        mode, size, namesize = fields[1], fields[6], fields[11]
+        name_start = offset + 110
+        name_end = name_start + namesize
+        if namesize < 1 or name_end > len(raw) or raw[name_end - 1] != 0:
+            raise ValueError("invalid newc member name")
+        name = raw[name_start:name_end - 1].decode("utf-8", "surrogateescape")
+        content_start = (name_end + 3) & ~3
+        content_end = content_start + size
+        if content_end > len(raw):
+            raise ValueError("truncated newc member content")
+        content = raw[content_start:content_end]
+        if magic == b"070702" and sum(content) & 0xffffffff != fields[12]:
+            raise ValueError("invalid newc member checksum")
+        offset = (content_end + 3) & ~3
+        if name == "TRAILER!!!":
+            continue
+        normalized = name.removeprefix("./").removeprefix("/")
+        if ".." in Path(normalized).parts:
+            raise ValueError("unsafe installer initrd member")
+        members[normalized] = (mode, content)
+    return members
+
+
+def validate_production_initrd(source):
+    """Require shipped interactive safety wiring before adding CI overrides."""
+    members = initrd_members(source)
+    for name in ("preseed.cfg", "usr/lib/locasos/guard-vm.sh",
+                 "usr/lib/locasos/finish-install.sh"):
+        if name not in members:
+            raise ValueError("production installer initrd missing " + name)
+        mode, content = members[name]
+        if mode & 0o170000 != 0o100000 or not content:
+            raise ValueError("production installer member must be a nonempty regular file: " + name)
+        if name.endswith(".sh") and not mode & 0o111:
+            raise ValueError("production installer hook is not executable: " + name)
+    try:
+        settings = {line.strip() for line in members["preseed.cfg"][1].decode().splitlines()
+                    if line.strip() and not line.lstrip().startswith("#")}
+    except UnicodeDecodeError as error:
+        raise ValueError("production preseed is not UTF-8") from error
+    for required in (
+            "d-i preseed/early_command string /usr/lib/locasos/guard-vm.sh",
+            "d-i preseed/late_command string /usr/lib/locasos/finish-install.sh"):
+        if required not in settings:
+            raise ValueError("production installer safety command missing: " + required)
+    if any("partman" in line or "passwd/user-password" in line for line in settings):
+        raise ValueError("production preseed must not automate disk partitioning or credentials")
+    print("PASS: shipped installer initrd has interactive VM guard and finish hooks")
+
+
 def prepare_initrd(source, destination):
+    validate_production_initrd(source)
     files = [("preseed.cfg", PRESEED.encode(), 0o100644),
              ("usr/lib/locasos/ci-guard.sh", CI_GUARD.encode(), 0o100755),
              ("usr/lib/locasos/ci-finish.sh", CI_FINISH.encode(), 0o100755)]
