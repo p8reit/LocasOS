@@ -26,7 +26,7 @@ def healthy_payload(raw):
 
 def systemd_ready():
     try:
-        for unit in ("multi-user.target", *SERVICES):
+        for unit in ("multi-user.target", "dbus.service", *SERVICES):
             state = subprocess.run(
                 ["systemctl", "is-active", "--quiet", unit],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -93,7 +93,8 @@ def main():
         while time.monotonic() < deadline:
             if systemd_ready() and api_ready():
                 serial.write(MARKER + "\n")
-                if pathlib.Path("/etc/locasos-installed-vm-test").is_file():
+                if (pathlib.Path("/etc/locasos-installed-vm-test").is_file()
+                        or pathlib.Path("/etc/locasos-installed-vm").is_file()):
                     sentinel = pathlib.Path("/var/lib/locas/.locasos-vm-install-sentinel")
                     try:
                         persisted = sentinel.read_text(encoding="utf-8").strip() == "locasos-vm-install-v1"

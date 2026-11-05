@@ -47,10 +47,28 @@ Proposed **design**, not implemented:
 
 Native stable promotion requires: source CI; publisher-signature verification; UEFI VM full installation, reboot and rollback tests; physical USB boot with destructive protection; two real hardware GPU tests; signed update to a newer image; repeat rollback with unplugged network; recovery path; published provenance/SBOM.
 
-**Current hard blocker:** A real native signed/bootable ISO and a physical disk installer are intentionally absent. The disposable-VM prototype is not authorization to erase a device.
+**Current hard blocker:** A production publisher-signed native installer and validated physical-disk installation/recovery are absent. The developer VM ISO now embeds Debian's interactive live-installer; this is not authorization to erase a host device. See [VM installation](VM_INSTALLATION.md).
 
 ## October 2026 source-level VM safety gate (LOS-108)
 
 The native storage preflight workflow runs `check_vm_only_policy.py` and negative tests. It rejects shell disk-mutation commands outside a single explicitly allowlisted `install-qemu-only.sh` guest prototype; requires visible QEMU firmware opt-in, synthetic disk identity and `lsblk` checks before the first destructive command; rejects hard-coded hardware drive nodes and extra competing installer scripts. This is a **conservative source inspection**, not a security proof: shell aliasing/dynamic invocations and external scripts can escape textual matching. Runtime confinement, exact disk serial/topology verification at write time, and two independent real QEMU boots with persistent-data acceptance remain mandatory. Do not use the allowlist as a physical-installation waiver.
 
 PRs #102 and #103 are competing implementations; the planned canonical investigation baseline is #103, not an approved merge. The single-installer source gate deliberately rejects carrying both guest installers into `main`.
+
+## Interactive Debian VM installation (LOS-134)
+
+The next VM phase uses upstream Debian live-installer instead of introducing a
+custom partitioner. The ISO includes a UEFI/known-VM entry guard in its installer
+initrd, and retains Debian's interactive disk selection, account setup and final
+partition confirmation. The existing custom-mutator allowlist remains unchanged;
+upstream Debian's installer is not implemented or hidden inside a new shell
+mutator. DMI checks are a scope guard, not proof against pass-through. Hyper-V
+operators must verify VHDX-only host attachments before selecting a blank disk.
+Agents test only a newly-created isolated QEMU qcow2, never a host block device.
+
+Unattended answers exist only in the acceptance harness's temporary initrd copy,
+with a separate QEMU firmware opt-in and exact blank scratch-disk guard before
+partman. They are not distributed in the normal ISO. The test must install the
+actual image, shut down cleanly and boot its disk without ISO twice, requiring
+fresh health and persistence evidence each time. Production trust, physical
+installation, A/B upgrades and recovery gates are not waived by these VM tests.

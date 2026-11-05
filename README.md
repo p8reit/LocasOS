@@ -9,7 +9,7 @@ LocasOS is a local-first, headless AI appliance control plane. It is designed to
 | Target | Current status | Entry point |
 | --- | --- | --- |
 | Windows 11 / WSL2 | **Stable signed release, v0.10.6** | [WSL installation guide](docs/WSL_INSTALLATION.md) |
-| Debian 13 based native live ISO | **Developer image factory implemented; not an installer** | [Debian native distribution](docs/DEBIAN_NATIVE_DISTRIBUTION.md) |
+| Debian 13 based native VM ISO | **Developer live image and interactive VM installer; not a production release** | [VM installation](docs/VM_INSTALLATION.md) |
 | Native Ubuntu 24.04 UEFI VM | **Legacy prototype for comparative tests** | [Native Phase 1](docs/NATIVE_PHASE1.md) |
 | Bootable bare-metal x86-64 ISO | **Planned; not supported** | [Native installer design](docs/NATIVE_INSTALLER_ARCHITECTURE.md) |
 

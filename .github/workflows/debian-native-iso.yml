@@ -32,7 +32,10 @@ jobs:
         with:
           go-version: '1.23'
       - name: Test payload directory permissions
-        run: python3 -m unittest discover -s packaging/native -p 'test_verify_archive.py'
+        run: |
+          python3 -m unittest discover -s packaging/native -p 'test_verify_archive.py'
+          python3 -m unittest discover -s packaging/debian/installer -p 'test_*.py'
+          python3 packaging/debian/installer/check_vm_only_policy.py
       - name: Build inside upstream Debian 13 container
         shell: bash
         run: |
@@ -55,7 +58,7 @@ jobs:
             '
           sudo chown -R "$USER:$USER" dist build
       - name: Install VM verification tools on runner
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xorriso qemu-system-x86 ovmf
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xorriso qemu-system-x86 qemu-utils ovmf
       - name: Verify ISO identity and EFI metadata
         run: |
           cd dist/debian
@@ -81,6 +84,24 @@ jobs:
           set -e
           [[ "$result" -eq 124 ]] || { echo "UEFI VM exited unexpectedly ($result)" >&2; exit 1; }
           echo 'PASS: diskless UEFI VM smoke process alive (guest health still requires separate testing)'
+      - name: Install to disposable disk and verify two disk-only boots
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 packaging/debian/installer/verify_debian_install.py \
+            --iso dist/debian/locasos-native-developer-amd64.iso \
+            --sha256 "$(cut -d ' ' -f 1 dist/debian/locasos-native-developer-amd64.iso.sha256)" \
+            --ovmf-code /usr/share/OVMF/OVMF_CODE_4M.fd \
+            --ovmf-vars /usr/share/OVMF/OVMF_VARS_4M.fd \
+            --log-dir dist/debian/install-evidence
+      - name: Preserve installation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: locasos-vm-install-evidence
+          path: dist/debian/install-evidence
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Publish short-lived development artifact
         uses: actions/upload-artifact@v4
         with:

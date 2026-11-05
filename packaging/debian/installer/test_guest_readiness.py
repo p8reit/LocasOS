@@ -30,7 +30,7 @@ class GuestReadinessTests(unittest.TestCase):
             run.return_value.returncode = 0
             self.assertTrue(m.systemd_ready())
             seen = [call.args[0][-1] for call in run.call_args_list]
-            self.assertEqual(seen, ["multi-user.target", "locas-agent.service", "locas-core.service"])
+            self.assertEqual(seen, ["multi-user.target", "dbus.service", "locas-agent.service", "locas-core.service"])
             run.reset_mock()
             run.side_effect = [mock.Mock(returncode=0), mock.Mock(returncode=1)]
             self.assertFalse(m.systemd_ready())

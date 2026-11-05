@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LocasOS Debian-based developer live ISO. No disk installer or autoinstall.
+# LocasOS developer VM live ISO with interactive Debian installation.
 set -Eeuo pipefail
 # live-build and includes.chroot create public system directories and config.
 umask 022
@@ -12,6 +12,9 @@ bash packaging/native/validate-payload.sh
 workspace="$(mktemp -d)"
 trap 'rm -rf "$workspace"' EXIT
 mkdir -p "$workspace/config/package-lists" "$workspace/config/includes.chroot/usr/local/share/locasos" "$workspace/config/hooks/live"
+mkdir -p "$workspace/config/includes.installer/usr/lib/locasos"
+install -m 0755 packaging/debian/installer/guard-vm.sh packaging/debian/installer/finish-install.sh "$workspace/config/includes.installer/usr/lib/locasos/"
+install -m 0644 packaging/debian/installer/preseed.cfg "$workspace/config/includes.installer/preseed.cfg"
 # Source-build payload remains explicitly VM-only and is NOT executed by the live image.
 install -m 0644 dist/native/locasos-native-payload-amd64.tar "$workspace/config/includes.chroot/usr/local/share/locasos/"
 install -m 0644 dist/native/locasos-native-payload-amd64.tar.sha256 "$workspace/config/includes.chroot/usr/local/share/locasos/"
@@ -23,6 +26,9 @@ install -m 0644 packaging/debian/installer/locasos-guest-readiness.service "$wor
 grep -Ev '^[[:space:]]*(#|$)' packaging/common/base-packages.txt > "$workspace/config/package-lists/locasos.list.chroot"
 cat >> "$workspace/config/package-lists/locasos.list.chroot" <<'LIST'
 openssh-client
+openssh-server
+ifupdown
+isc-dhcp-client
 pciutils
 user-setup
 sudo
@@ -49,13 +55,19 @@ for user in locas-core locas-agent locas-ollama; do
 done
 tar -C / -xf /usr/local/share/locasos/locasos-native-payload-amd64.tar --no-same-owner
 systemctl enable locas-firstboot.service locas-agent.service locas-core.service locasos-guest-readiness.service
+# Installed SSH uses the operator's new account; live SSH remains opt-in.
+systemctl disable ssh.service ssh.socket
+rm -f /etc/ssh/ssh_host_* /var/lib/dbus/machine-id
+: > /etc/machine-id
+ln -s /etc/machine-id /var/lib/dbus/machine-id
 # Path workers are not enabled by default until native lifecycle approval is complete.
 HOOK
 chmod 0755 "$workspace/config/hooks/live/"*.hook.chroot
 cd "$workspace"
 lb config --mode debian --distribution trixie --architectures amd64 \
   --binary-images iso-hybrid --linux-flavours amd64 --linux-packages linux-image \
-  --debian-installer none --archive-areas "main" \
+  --debian-installer live --debian-installer-gui false \
+  --debian-installer-preseedfile /preseed.cfg --archive-areas "main" \
   --iso-application "LocasOS Developer Live" --iso-publisher "LocasOS Community" \
   --iso-volume "LOCASOS_DEV" --apt-recommends false
 lb build
@@ -64,4 +76,4 @@ image="$(find . -maxdepth 1 -type f -name '*.iso' -print -quit)"
 [[ -n "$image" ]] || { echo 'Live-build did not produce an ISO' >&2; exit 1; }
 install -m 0644 "$image" "$repo/dist/debian/locasos-native-developer-amd64.iso"
 (cd "$repo/dist/debian" && sha256sum locasos-native-developer-amd64.iso > locasos-native-developer-amd64.iso.sha256)
-echo 'Built Debian-based LocasOS developer live ISO; NOT an OS installer or stable release.'
+echo 'Built LocasOS developer VM live/install ISO; physical installation and stable release unsupported.'
